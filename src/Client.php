@@ -38,7 +38,7 @@ class Client
      */
     public function __destruct()
     {
-        \curl_close($this->curl); // Cierra la sesión de cURL
+        // Cierra la sesión de cURL
         unset($this->curl);
     }
 
@@ -49,7 +49,7 @@ class Client
     {
         //Obtener cabeceras
         $headers = $options['headers'] ?? [];
-        
+
         // Obtiene la petición
         $this->request = new Request(
             $method,
@@ -153,8 +153,24 @@ class Client
                 $this->request->setHeader('Content-Type', 'application/json');
             } elseif (isset($options['multipart'])) {
                 // multipart/form-data
-                $curlOptions[\CURLOPT_POSTFIELDS] = $options['multipart'];
-                $this->request->setHeader('Content-Type', 'multipart/form-data');
+                $multipart = [];
+
+                foreach ($options['multipart'] as $part) {
+
+                    if (!isset($part['name'], $part['contents'])) {
+                        throw new \InvalidArgumentException(
+                            'Each multipart entry must have name and contents'
+                        );
+                    }
+
+                    $multipart[$part['name']] = $this->normalizeMultipartValue(
+                        $part['contents'],
+                        $part['filename'] ?? null,
+                        $part['headers']['Content-Type'] ?? null
+                    );
+                }
+
+                $curlOptions[\CURLOPT_POSTFIELDS] = $multipart;
             } elseif (isset($options['body'])) {
                 // text/plain
                 $curlOptions[\CURLOPT_POSTFIELDS] = $options['body'];
@@ -249,5 +265,72 @@ class Client
                 throw new \InvalidArgumentException("Invalid certificate in $filename");
             }
         }
+    }
+
+    /**
+     * Normaliza un valor multipart para que cURL lo entienda
+     *
+     * Acepta:
+     * - CURLFile
+     * - Stream (Mk4U\Http\Stream)
+     * - resource (fopen)
+     * - string (texto o path)
+     */
+    private function normalizeMultipartValue(
+        mixed $value,
+        ?string $filename = null,
+        ?string $contentType = null
+    ): mixed {
+
+        // Si es una instancia de CURLFile lo usa directamente
+        if ($value instanceof \CURLFile) {
+            return $value;
+        }
+
+        // Stream o resource
+        if ($value instanceof Stream || is_resource($value)) {
+
+            // Si es tu Stream, lo convertimos a resource
+            if ($value instanceof Stream) {
+                $value = $value->detach();
+            }
+
+            if (!is_resource($value)) {
+                throw new \RuntimeException('Invalid stream resource');
+            }
+
+            $meta = stream_get_meta_data($value);
+            $path = $meta['uri'] ?? null;
+
+            if (!$path || !is_file($path)) {
+                throw new \RuntimeException(
+                    'Stream/resource must be backed by a file'
+                );
+            }
+
+            return new \CURLFile(
+                $path,
+                $contentType,
+                $filename ?? basename($path)
+            );
+        }
+
+        // Texto plano
+        if (is_string($value) || is_numeric($value)) {
+            // Si es path válido → archivo
+            if (is_file($value)) {
+                return new \CURLFile(
+                    $value,
+                    $contentType,
+                    $filename ?? basename($value)
+                );
+            }
+            // Si no, se envía como campo normal
+            return (string) $value;
+        }
+
+        throw new \InvalidArgumentException(
+            'Unsupported multipart contents type'
+        );
     }
 }
