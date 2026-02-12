@@ -142,13 +142,26 @@ try {
 }
 ```
 
-### Sending multipart data (multipart/form-data)
+### Sending multipart data
 ```php
 $options = [
     'multipart' => [
-        'title'=> 'bar',
-        'body'=> 'baz',
-        'userId'=> 2,
+        [
+            'name' => 'title',
+            'contents' => 'bar'
+        ],
+        [
+            'name' => 'body',
+            'contents' => 'baz'
+        ],
+        [
+            'name' => 'userId',
+            'contents' => 2
+        ],
+        [
+            'name' => 'file',
+            'contents' => __DIR__.'/filename.ext'
+        ]
     ],
     'headers'=>[
         'custom-header'=>'My Custom Header'
