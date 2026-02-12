@@ -45,7 +45,7 @@ class UploadedFile
      * Cuando se usa en un entorno SAPI donde $_FILES está poblado, cuando se escribe
      * archivos a través de moveTo(), is_uploaded_file() y move_uploaded_file() DEBERÍAN ser
      * usadas para asegurar que los permisos y el estado de subida son verificados correctamente.
-     * *
+     *
      * Si desea pasar a un flujo, utilice getStream(), ya que las operaciones SAPI
      * no pueden garantizar la escritura en destinos de flujo.
      *
