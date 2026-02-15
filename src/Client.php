@@ -316,9 +316,9 @@ class Client
         }
 
         // Texto plano
-        if (is_string($value) || is_numeric($value)) {
+        if (is_scalar($value)) {
             // Si es path válido → archivo
-            if (is_file($value)) {
+            if (is_string($value) && is_file($value)) {
                 return new \CURLFile(
                     $value,
                     $contentType,
