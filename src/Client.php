@@ -54,7 +54,7 @@ class Client
         $this->request = new Request(
             $method,
             $uri,
-            array_merge($this->optionDefault, $headers)
+            array_merge($this->optionDefault['headers'] ?? [], $headers)
         );
 
         // Verifica el método
@@ -184,8 +184,15 @@ class Client
         // Establecer URI
         $this->url($options['query'] ?? []);
 
+        // Formatear headers
+        $formattedHeaders = [];
+        
+        foreach ($this->request->getHeaders() as $key => $value) {
+            $formattedHeaders[] = $key . ': ' . $value;
+            }
+            
         // Cabeceras HTTP
-        $curlOptions[\CURLOPT_HTTPHEADER] = $this->request->getHeaders();
+        $curlOptions[\CURLOPT_HTTPHEADER] = $formattedHeaders;
 
         // Certificado SSL
         if (isset($options['verify'])) {
