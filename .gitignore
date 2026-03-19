@@ -1,7 +1,4 @@
 /vendor/
-index.php
+/*.php
 .htaccess
 composer.lock
-
-# Fichero dentro de src/
-#src/Client.php
