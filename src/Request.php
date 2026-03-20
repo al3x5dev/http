@@ -176,7 +176,7 @@ class Request
         if (
             in_array($this->getMethod(), ['PUT', 'DELETE', 'PATCH'])
             ||
-            ($this->hasMethod('POST') && $this->isFormData() === false)
+            ($this->hasMethod('POST') && !$this->isFormData())
         ) {
             $this->content = file_get_contents('php://input');
         }

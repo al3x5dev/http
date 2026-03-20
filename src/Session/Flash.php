@@ -2,8 +2,6 @@
 
 namespace Mk4U\Http\Session;
 
-use Leaf\Flash as LeafFlash;
-
 /**
  * Flash class
  */
