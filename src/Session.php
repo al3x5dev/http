@@ -52,7 +52,7 @@ class Session
             }
 
             return session_start([
-                "name" => "_mk4u_",
+                "name" => "_mk4u_" . bin2hex(random_bytes(8)),
                 "use_cookies" => true,
                 "use_only_cookies" => true,
                 "cookie_lifetime" => 0,

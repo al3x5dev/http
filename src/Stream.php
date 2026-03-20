@@ -95,8 +95,7 @@ class Stream
         $stream = $this->stream;
         $this->stream = null;
         return $stream;
-
-}
+    }
 
     /**
      * Obtenga el tamaño de la transmisión si lo conoce.

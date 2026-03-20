@@ -101,10 +101,26 @@ trait Headers
      */
     public function addHeader(string $name, string|array $value): static
     {
+        $key = $this->sanitizeHeader($name);
+
         if (!$this->hasHeader($name)) {
             return $this->setHeader($name, $value);
         }
-        array_merge($this->headers[$this->sanitizeHeader($name)], [$name => $value]);
+
+        $current = $this->headers[$key];
+        if (is_string($current)) {
+            $current = [$current];
+        } elseif (!is_array($current)) {
+            $current = [];
+        }
+
+        if (is_array($value)) {
+            $current = array_merge($current, $value);
+        } else {
+            $current[] = $value;
+        }
+
+        $this->headers[$key] = $current;
         return clone $this;
     }
 
@@ -122,7 +138,6 @@ trait Headers
      */
     private function sanitizeHeader(string $name): string
     {
-
         return str_replace(' ', '-', ucwords(str_replace(['-', '_'], ' ', strtolower($name))));
     }
 }

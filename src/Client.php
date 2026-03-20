@@ -178,7 +178,7 @@ class Client
             }
         }
         if ($this->request->hasMethod('head') || $this->request->hasMethod('options')) {
-            $curlopts[\CURLOPT_NOBODY] = true;
+            $curlOptions[\CURLOPT_NOBODY] = true;
         }
 
         // Establecer URI
