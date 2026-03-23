@@ -15,7 +15,7 @@ class Cookie
         mixed $value,
         int $expires = 0,
         string $path = '/',
-        ?string $domain = null,
+        string $domain = '',
         bool $secure = false,
         bool $httponly = false
     ): bool {
@@ -51,7 +51,7 @@ class Cookie
     public  static function remove(
         string $name,
         string $path = '/',
-        ?string $domain = null,
+        string $domain = '',
         bool $secure = false,
         bool $httponly = false
     ): void {

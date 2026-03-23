@@ -49,7 +49,7 @@ class Stream
     public function __construct(private mixed $stream, string $mode = 'r')
     {
         if (!is_resource($stream)) {
-            $this->stream = fopen($stream, $mode);
+            $this->stream = @fopen($stream, $mode);
 
             if ($this->stream === false) {
                 throw new \RuntimeException("Could not open the resource: $stream with mode: $mode");
