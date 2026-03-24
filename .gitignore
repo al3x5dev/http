@@ -2,3 +2,6 @@
 /*.php
 .htaccess
 composer.lock
+
+/tests
+/.phpunit.cache
