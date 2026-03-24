@@ -2,14 +2,19 @@
 
 namespace Mk4U\Http;
 
+use Psr\Http\Message\StreamInterface;
+
 /**
  * Describe un flujo de datos.
  *
  * Normalmente, una instancia envolverá una secuencia PHP; esta interfaz proporciona un 
  * resumen de las operaciones más comunes, incluida la serialización de toda la 
  * secuencia a una cadena.
+ *
+ * Implementa PSR-7 StreamInterface
+ * @see https://www.php-fig.org/psr/psr-7/#36-psrhttpmessagestreaminterface
  */
-class Stream
+class Stream implements StreamInterface
 {
     // Array de modos leíbles
     private const readableModes = [
@@ -26,7 +31,8 @@ class Stream
         'x+',   // Creación y escritura (fallará si el archivo ya existe)
         'xb+',  // Creación y escritura en modo binario (fallará si el archivo ya existe)
         'c+',   // Escritura (truncar) y lectura
-        'cb+'   // Escritura (truncar) y lectura en modo binario
+        'cb+',  // Escritura (truncar) y lectura en modo binario
+        'w+b',  // Escritura y lectura binario (php://memory)
     ];
 
     // Array de modos escribibles
@@ -42,7 +48,10 @@ class Stream
         'r+',   // Lectura y escritura
         'rb+',  // Lectura y escritura en modo binario
         'rw',   // Lectura y escritura (no es un modo estándar en PHP, pero se incluye aquí para referencia)
-        'c+'    // Escritura (truncar) y lectura
+        'c+',   // Escritura (truncar)
+        'w+',   // Escritura y lectura
+        'w+b',  // Escritura y lectura binario (php://memory)
+        'a+',   // Escritura y lectura
     ];
 
 
@@ -174,9 +183,9 @@ class Stream
      * @param string $data La cadena que se va a escribir.
      * @return int Devuelve el número de bytes escritos en la secuencia.
      */
-    public function write(string $data): int|false
+    public function write(string $data): int
     {
-        return fwrite($this->stream, $data);
+        return fwrite($this->stream, $data) ?: 0;
     }
 
     /**
@@ -196,12 +205,12 @@ class Stream
      * @return string Devuelve los datos leídos de la secuencia o una cadena vacía si no 
      * hay bytes disponibles.
      */
-    public function read(int $length): string|false
+    public function read(int $length): string
     {
         if ($this->getSize() == 0) {
             return '';
         }
-        return fread($this->stream, $length);
+        return fread($this->stream, $length) ?: '';
     }
 
     /**

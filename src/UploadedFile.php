@@ -3,13 +3,20 @@
 namespace Mk4U\Http;
 
 use InvalidArgumentException;
+use Psr\Http\Message\StreamInterface;
+use Psr\Http\Message\UploadedFileInterface;
 use RuntimeException;
 
 /**
  * Uploaded File class
+ * 
+ * Implementa PSR-7 UploadedFileInterface
+ * @see https://www.php-fig.org/psr/psr-7/#34-psrhttpmessageuploadedfileinterface
  */
-class UploadedFile
+class UploadedFile implements UploadedFileInterface
 {
+    private ?StreamInterface $stream = null;
+    private bool $moved = false;
 
     public function __construct(
         private ?string $name = null,
@@ -58,6 +65,10 @@ class UploadedFile
      */
     public function moveTo(string $targetPath): void
     {
+        if ($this->moved) {
+            throw new \RuntimeException('File has already been moved');
+        }
+
         if (!$this->uploadOk()) {
             throw new RuntimeException("An error occurred during the move operation.");
         }
@@ -66,7 +77,41 @@ class UploadedFile
             throw new InvalidArgumentException('Invalid path for the movement operation, must be a non-empty string.');
         }
 
-        move_uploaded_file($this->tmp_name, "$targetPath/{$this->getFilename()}");
+        move_uploaded_file($this->tmp_name, "$targetPath/{$this->getClientFilename()}");
+        
+        $this->moved = true;
+    }
+
+    /**
+     * Recuperar una transmisión que represente el archivo cargado.
+     *
+     * Este método DEBE devolver una instancia de StreamInterface, que representa la
+     * archivo cargado. El propósito de este método es permitir la utilización de PHP nativo
+     * funcionalidad de flujo para manipular la carga de archivos, como
+     * stream_copy_to_stream() (aunque el resultado tendrá que ser decorado en un
+     * envoltura de flujo de PHP nativo para trabajar con tales funciones).
+     *
+     * Si el método moveTo() se ha llamado anteriormente, este método DEBE aumentar
+     * Una excepción.
+     *
+     * @return StreamInterface Representación del archivo cargado.
+     * @throws \RuntimeException en los casos en que no hay flujo disponible o puede ser
+     * creado.
+     */
+    public function getStream(): StreamInterface
+    {
+        if ($this->moved) {
+            throw new \RuntimeException('File has already been moved');
+        }
+        
+        if ($this->stream === null) {
+            if ($this->tmp_name === '' || !is_file($this->tmp_name)) {
+                throw new \RuntimeException('No stream available');
+            }
+            $this->stream = new Stream($this->tmp_name, 'r');
+        }
+        
+        return $this->stream;
     }
 
     /**
@@ -105,10 +150,21 @@ class UploadedFile
      *
      * Las implementaciones DEBERÍAN devolver el valor almacenado en la clave "name" de
      * el archivo en el array $_FILES.
+     * 
+     * @return string|null El nombre del archivo enviado por el cliente o null si no se proporcionó.
+     */
+    public function getClientFilename(): ?string
+    {
+        return $this->name;
+    }
+
+    /**
+     * Alias para compatibilidad hacia atrás.
+     * @deprecated Usar getClientFilename() en su lugar
      */
     public function getFilename(): ?string
     {
-        return $this->name;
+        return $this->getClientFilename();
     }
 
     /**
@@ -140,9 +196,18 @@ class UploadedFile
      * @return string|null El tipo de medio enviado por el cliente o null si no se ha proporcionado ninguno.
      * fue proporcionado.
      */
-    public function getMediaType(): ?string
+    public function getClientMediaType(): ?string
     {
         return $this->type;
+    }
+
+    /**
+     * Alias para compatibilidad hacia atrás.
+     * @deprecated Usar getClientMediaType() en su lugar
+     */
+    public function getMediaType(): ?string
+    {
+        return $this->getClientMediaType();
     }
 
     /**
