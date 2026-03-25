@@ -319,7 +319,7 @@ class Uri implements UriInterface
      */
     private static function userInfo(string $user, ?string $password = NULL): string
     {
-        return (isset($password)) ? "$user:$password" : $user;;
+        return (isset($password)) ? "$user:$password" : $user;
     }
 
     /**
@@ -327,10 +327,25 @@ class Uri implements UriInterface
      */
     public static function fromString(string $uri): UriInterface
     {
+        $parts = [];
+
         if ($uri !== '') {
-            if (empty($parts = parse_url($uri))) {
+            $parts = parse_url($uri);
+            if (empty($parts)) {
                 //Unable to parse URI
                 throw new \InvalidArgumentException("Unable to parse URI");
+            }
+
+            // Fix: si no hay scheme, no hay host, y el path parece dominio (no empieza con /), moverlo a host
+            if (
+                empty($parts['scheme']) &&
+                empty($parts['host']) &&
+                !empty($parts['path']) &&
+                !str_starts_with($parts['path'], '/') &&
+                filter_var($parts['path'], FILTER_VALIDATE_DOMAIN)
+            ) {
+                $parts['host'] = $parts['path'];
+                $parts['path'] = '';
             }
         }
 
@@ -358,15 +373,15 @@ class Uri implements UriInterface
      */
     private static function normalizedPort(?int $port = null, string $scheme = ''): ?int
     {
-        if (!is_null($port) &&($port < 1 || $port > 65535)) {
+        if (!is_null($port) && ($port < 1 || $port > 65535)) {
             throw new \InvalidArgumentException(sprintf('Invalid port: %d. It must be between 0 and 65535', $port));
         }
 
-        if ($scheme == '' && empty($port)) {
+        if ($scheme === '' && is_null($port)) {
             return null;
         }
 
-        $default = self::DEFAULT_PORTS[$scheme];
+        $default = self::DEFAULT_PORTS[$scheme] ?? '';
         if (!empty($default) && $default === $port) {
             return null;
         }
@@ -382,7 +397,7 @@ class Uri implements UriInterface
     {
         return [
             'scheme' => $this->getScheme(),
-            'user-info' => $this->userInfo,
+            'userInfo' => $this->userInfo,
             'host' => $this->getHost(),
             'port' => $this->getPort(),
             'path' => $this->getPath(),
