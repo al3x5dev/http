@@ -57,14 +57,20 @@ class Stream implements StreamInterface
 
     public function __construct(private mixed $stream, string $mode = 'r')
     {
-        if (!is_resource($stream)) {
-            $this->stream = @fopen($stream, $mode);
+        if ($stream === null) {
+            $this->stream = null;
+            return;
+        }
 
-            if ($this->stream === false) {
-                throw new \RuntimeException("Could not open the resource: $stream with mode: $mode");
-            }
-        } else {
+        if (is_resource($stream)) {
             $this->stream = $stream;
+            return;
+        }
+
+        $this->stream = @fopen($stream, $mode);
+
+        if ($this->stream === false) {
+            throw new \RuntimeException("Could not open the resource: $stream with mode: $mode");
         }
     }
 
@@ -78,7 +84,7 @@ class Stream implements StreamInterface
      */
     public function __toString(): string
     {
-        if (isset($this->stream)) {
+        if ($this->stream !== null) {
             $this->seek(0);
             return $this->getContents();
         }
@@ -94,10 +100,13 @@ class Stream implements StreamInterface
         if (is_resource($this->stream)) {
             fclose($this->stream);
         }
+        $this->stream = null;
     }
 
     /**
-     * Separa los recursos subyacentes del flujo.
+     * Separa los recursos subyacentes del stream.
+     * 
+     * @return resource|null Stream subyacente de PHP, o null si no hay.
      */
     public function detach(): mixed
     {
@@ -107,26 +116,47 @@ class Stream implements StreamInterface
     }
 
     /**
-     * Obtenga el tamaño de la transmisión si lo conoce.
+     * Obtiene el tamaño del stream si se conoce.
+     * 
+     * @return int|null Tamaño en bytes si se conoce, o null si es desconocido.
      */
     public function getSize(): ?int
     {
-        return fstat($this->stream)['size'] ?? null;
+        if ($this->stream === null) {
+            return null;
+        }
+        $stats = fstat($this->stream);
+        return $stats['size'] ?? null;
     }
 
     /**
-     *  Devuelve la posición actual del puntero de lectura/escritura del archivo.
+     * Devuelve la posición actual del puntero de lectura/escritura del archivo.
+     * 
+     * @return int Posición del puntero del archivo
+     * @throws \RuntimeException Si ocurre un error.
      */
     public function tell(): int
     {
-        return ftell($this->stream);
+        if ($this->stream === null) {
+            throw new \RuntimeException('Stream is detached');
+        }
+        $position = ftell($this->stream);
+        if ($position === false) {
+            throw new \RuntimeException('Error getting position');
+        }
+        return $position;
     }
 
     /**
-     * Devuelve verdadero si el puntero está al final de la transmisión.
+     * Devuelve verdadero si el puntero está al final del stream.
+     * 
+     * @return bool
      */
     public function eof(): bool
     {
+        if ($this->stream === null) {
+            return true;
+        }
         return feof($this->stream);
     }
 
@@ -139,34 +169,48 @@ class Stream implements StreamInterface
     }
 
     /**
-     *Buscar una posición en la flujo.
+     * Busca una posición en el stream.
      *
-     * @see http://www.php.net/manual/es/function.fseek.php
-     * 
-     * @param int $offset Desplazamiento de flujo
-     * @param int $wherece Especifica cómo se calculará la posición del cursor basado 
-     * en el desplazamiento de búsqueda.
-     * 
-     * SEEK_SET: Establecer posición igual a bytes de desplazamiento
-     * SEEK_CUR: establece la posición en la ubicación actual más el desplazamiento
-     * SEEK_END: establece la posición al final de la transmisión más el desplazamiento.
+     * @link http://www.php.net/manual/es/function.fseek.php
+     * @param int $offset Desplazamiento del stream
+     * @param int $whence Especifica cómo se calculará la posición del cursor
+     * @throws \RuntimeException Si falla.
      */
     public function seek(int $offset, int $whence = SEEK_SET): void
     {
-        fseek($this->stream, $offset, $whence);
+        if ($this->stream === null) {
+            throw new \RuntimeException('Stream is detached');
+        }
+        if (!$this->isSeekable()) {
+            throw new \RuntimeException('Stream is not seekable');
+        }
+        $result = fseek($this->stream, $offset, $whence);
+        if ($result === -1) {
+            throw new \RuntimeException('Error seeking in stream');
+        }
     }
 
     /**
-     *Buscar hasta el inicio del arroyo.
+     * Rebobina el stream hasta el inicio.
      *
-     * Si la secuencia no se puede buscar, este método generará una excepción;
-     * en caso contrario, realizará una seek(0).
+     * Si el stream no es buscable, este método lanzará una excepción;
+     * de lo contrario, realizará un seek(0).
      *
-     * @see https://www.php.net/manual/es/function.rewind.php
+     * @see seek()
+     * @link http://www.php.net/manual/es/function.rewind.php
+     * @throws \RuntimeException Si falla.
      */
     public function rewind(): void
     {
-        rewind($this->stream);
+        if ($this->stream === null) {
+            throw new \RuntimeException('Stream is detached');
+        }
+        if (!$this->isSeekable()) {
+            throw new \RuntimeException('Stream is not seekable');
+        }
+        if (!rewind($this->stream)) {
+            throw new \RuntimeException('Error rewinding stream');
+        }
     }
 
     /**
@@ -178,14 +222,25 @@ class Stream implements StreamInterface
     }
 
     /**
-     * Escribe datos en la secuencia.
+     * Escribe datos en el stream.
      *
      * @param string $data La cadena que se va a escribir.
-     * @return int Devuelve el número de bytes escritos en la secuencia.
+     * @return int Número de bytes escritos en el stream.
+     * @throws \RuntimeException Si falla.
      */
     public function write(string $data): int
     {
-        return fwrite($this->stream, $data) ?: 0;
+        if ($this->stream === null) {
+            throw new \RuntimeException('Stream is detached');
+        }
+        if (!$this->isWritable()) {
+            throw new \RuntimeException('Stream is not writable');
+        }
+        $result = fwrite($this->stream, $data);
+        if ($result === false) {
+            throw new \RuntimeException('Error writing to stream');
+        }
+        return $result;
     }
 
     /**
@@ -197,52 +252,64 @@ class Stream implements StreamInterface
     }
 
     /**
-     * Leer datos de la transmisión.
+     * Lee datos del stream.
      *
-     * @param int $length Lee hasta $length bytes del objeto y regresa
-     * a ellos. Se pueden devolver menos de $length bytes si la secuencia subyacente
-     * la llamada devuelve menos bytes.
-     * @return string Devuelve los datos leídos de la secuencia o una cadena vacía si no 
-     * hay bytes disponibles.
+     * @param int $length Lee hasta $length bytes del objeto y los retorna.
+     * Se pueden devolver menos de $length bytes si el stream subyacente
+     * devuelve menos bytes.
+     * @return string Datos leídos del stream, o cadena vacía si no hay bytes disponibles.
+     * @throws \RuntimeException Si ocurre un error.
      */
     public function read(int $length): string
     {
-        if ($this->getSize() == 0) {
-            return '';
+        if ($this->stream === null) {
+            throw new \RuntimeException('Stream is detached');
         }
-        return fread($this->stream, $length) ?: '';
+        if (!$this->isReadable()) {
+            throw new \RuntimeException('Stream is not readable');
+        }
+        $result = fread($this->stream, $length);
+        if ($result === false) {
+            throw new \RuntimeException('Error reading from stream');
+        }
+        return $result;
     }
 
     /**
-     * Devuelve el contenido restante en una cadena
+     * Devuelve el contenido restante del stream.
      *
-     * @return string
-     * @throws \RuntimeException si no se puede leer.
+     * @return string Contenido del stream.
+     * @throws \RuntimeException Si no se puede leer o ocurre un error.
      */
     public function getContents(): string
     {
-        if (!$this->isReadable()) {
-            throw new \RuntimeException("Cannot read the stream. Please ensure that the stream is readable.");
+        if ($this->stream === null) {
+            throw new \RuntimeException('Stream is detached');
         }
-
-        return stream_get_contents($this->stream);
+        if (!$this->isReadable()) {
+            throw new \RuntimeException('Stream is not readable');
+        }
+        $result = stream_get_contents($this->stream);
+        if ($result === false) {
+            throw new \RuntimeException('Error reading from stream');
+        }
+        return $result;
     }
 
     /**
-     * Obtenga metadatos de transmisión como una matriz asociativa o recupere una clave específica.
+     * Obtiene metadatos del stream como array asociativo o recupera una clave específica.
      *
-     * Las claves devueltas son idénticas a las claves devueltas por PHP
-     * Función stream_get_meta_data().
+     * Las claves devueltas son idénticas a las devueltas por la función
+     * stream_get_meta_data() de PHP.
      *
-     * @see http://php.net/manual/en/function.stream-get-meta-data.php
-     * @param string $key Metadatos específicos para recuperar.
-     * @return array|mixed|null Devuelve una matriz asociativa si no hay ninguna clave 
-     * proporcionó. Devuelve un valor de clave específico si se proporciona una clave y el 
-     * se encuentra el valor, o nulo si no se encuentra la clave.
+     * @see http://php.net/manual/es/function.stream-get-meta-data.php
+     * @param string|null $key Metadatos específicos a recuperar.
+     * @return array|mixed|null Array asociativo si no se proporciona clave.
+     * Valor específico si se proporciona y se encuentra, o null si no se encuentra.
      */
     public function getMetadata(?string $key = null): mixed
     {
-        if (!is_resource($this->stream)) {
+        if ($this->stream === null) {
             return null;
         }
         $meta = stream_get_meta_data($this->stream);
