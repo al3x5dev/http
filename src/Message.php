@@ -19,7 +19,7 @@ class Message implements MessageInterface
     protected string $version = 'HTTP/1.1';
 
     /** @var array Versiones de protocolo HTTP válidas */
-    protected const VERSIONS = ['1.0', '1.1', '2', '3'];
+    protected const VERSIONS = ['1.0', '1.1', '2.0', '3.0'];
 
     /** @var array Cabeceras del mensaje HTTP */
     protected array $headers = [];
@@ -53,7 +53,7 @@ class Message implements MessageInterface
      * Este método DEBE conservarel estado de la instancia actual y devolver
      * una instancia que contenga la versión del protocolo especificada.
      *
-     * @param string $version Versión del protocolo (1.0, 1.1, 2, 3)
+     * @param string $version Versión del protocolo (1.0, 1.1, 2.0, 3.0)
      * @return static Nueva instancia con la versión especificada
      * @throws \InvalidArgumentException Para versiones de protocolo no válidas
      */
@@ -121,17 +121,33 @@ class Message implements MessageInterface
     /**
      * Devuelve una instancia con la cabecera especificada
      *
-     * Este método DEBE conservarel estado de la instancia actual y devolver
+     * Este método DEBE conservar el estado de la instancia actual y devolver
      * una instancia que contenga la cabecera especificada.
      *
      * @param string $name Nombre de la cabecera
      * @param mixed $value Valor de la cabecera
      * @return static Nueva instancia con la cabecera especificada
      */
-    public function withHeader(string $name, mixed $value): static
+    public function withHeader(string $name, mixed $value): MessageInterface
     {
         $new = clone $this;
         $new->headers[$new->sanitizeHeader($name)] = $value;
+        return $new;
+    }
+
+    /**
+     * Devuelve una instancia con las cabeceras especificada
+     *
+     * @param string $name Nombre de la cabecera
+     * @param mixed $value Valor de la cabecera
+     * @return static Nueva instancia con la cabecera especificada
+     */
+    public function withHeaders(array $headers): MessageInterface
+    {
+        $new = clone $this;
+        foreach ($headers as $name => $value) {
+            $new->headers[$new->sanitizeHeader($name)] = $value;
+        }
         return $new;
     }
 
@@ -144,7 +160,7 @@ class Message implements MessageInterface
      * @param mixed $value Valor a agregar
      * @return static Nueva instancia con la cabecera agregada
      */
-    public function withAddedHeader(string $name, mixed $value): static
+    public function withAddedHeader(string $name, mixed $value): MessageInterface
     {
         $new = clone $this;
         $key = $new->sanitizeHeader($name);
@@ -168,7 +184,7 @@ class Message implements MessageInterface
      * @param string $name Nombre de la cabecera a eliminar
      * @return static Nueva instancia sin la cabecera
      */
-    public function withoutHeader(string $name): static
+    public function withoutHeader(string $name): MessageInterface
     {
         $new = clone $this;
         unset($new->headers[$new->sanitizeHeader($name)]);
@@ -191,7 +207,7 @@ class Message implements MessageInterface
      * @param StreamInterface $body Cuerpo del mensaje
      * @return static Nueva instancia con el cuerpo especificado
      */
-    public function withBody(StreamInterface $body): static
+    public function withBody(StreamInterface $body): MessageInterface
     {
         $new = clone $this;
         $new->body = $body;
