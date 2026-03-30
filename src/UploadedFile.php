@@ -2,10 +2,8 @@
 
 namespace Mk4U\Http;
 
-use InvalidArgumentException;
 use Psr\Http\Message\StreamInterface;
 use Psr\Http\Message\UploadedFileInterface;
-use RuntimeException;
 
 /**
  * Uploaded File class
@@ -19,18 +17,12 @@ class UploadedFile implements UploadedFileInterface
     private bool $moved = false;
 
     public function __construct(
-        private ?string $name = null,
-        private ?string $type = null,
         public string $tmp_name,
         private int $error,
-        private ?int $size
-    ) {
-        $this->name = $name;
-        $this->type = $type;
-        $this->tmp_name = $tmp_name;
-        $this->error = $error;
-        $this->size = $size;
-    }
+        private ?int $size,
+        private ?string $name = null,
+        private ?string $type = null
+    ) {}
 
     /**
      * Mover el archivo subido a una nueva ubicación.
@@ -70,16 +62,101 @@ class UploadedFile implements UploadedFileInterface
         }
 
         if (!$this->uploadOk()) {
-            throw new RuntimeException("An error occurred during the move operation.");
+            throw new \RuntimeException("An error occurred during the move operation.");
         }
 
         if (empty($targetPath)) {
-            throw new InvalidArgumentException('Invalid path for the movement operation, must be a non-empty string.');
+            throw new \InvalidArgumentException('Invalid path for the movement operation, must be a non-empty string.');
         }
 
-        move_uploaded_file($this->tmp_name, "$targetPath/{$this->getClientFilename()}");
-        
+        if (!is_dir($targetPath)) {
+            throw new \InvalidArgumentException('Target path must be a valid directory.');
+        }
+
+        $filename = $this->sanitizeFilename($this->getClientFilename());
+        $targetPath = rtrim($targetPath, '/\\');
+
+        if (!move_uploaded_file($this->tmp_name, "$targetPath/$filename")) {
+            throw new \RuntimeException('Error moving uploaded file.');
+        }
+
         $this->moved = true;
+    }
+
+    private function sanitizeFilename(?string $filename): string
+    {
+        if ($filename === null || $filename === '') {
+            return 'uploaded_file';
+        }
+
+        $filename = preg_replace('/[\x00-\x1F\x7F]/', '', $filename);
+        $filename = basename($filename);
+
+        if ($filename === '' || $filename === '.') {
+            return 'uploaded_file';
+        }
+
+        return $filename;
+    }
+
+    /**
+     * Extrae la extensión(s) del nombre de archivo.
+     *
+     * @param string|null $filename Nombre del archivo
+     * @return string|null Extensión o null si no hay
+     */
+    public function getExtension(?string $filename): ?string
+    {
+        if ($filename === null || $filename === '') {
+            return null;
+        }
+
+        $filename = basename($filename);
+
+        if (strpos($filename, '.') === false) {
+            return null;
+        }
+
+        $extensions = ['tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst'];
+        $filenameLower = strtolower($filename);
+
+        foreach ($extensions as $ext) {
+            if (str_ends_with($filenameLower, ".$ext")) {
+                return $ext;
+            }
+        }
+
+        return pathinfo($filename, PATHINFO_EXTENSION);
+    }
+
+    /**
+     * Extrae el nombre base sin extensión.
+     *
+     * @param string|null $filename Nombre del archivo
+     * @return string Nombre base
+     */
+    public function getBasename(?string $filename): string
+    {
+        if ($filename === null || $filename === '') {
+            return 'uploaded_file';
+        }
+
+        $filename = basename($filename);
+
+        if (strpos($filename, '.') === false) {
+            return $filename;
+        }
+
+        $extensions = ['tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst'];
+        $filenameLower = strtolower($filename);
+
+        foreach ($extensions as $ext) {
+            if (str_ends_with($filenameLower, ".$ext")) {
+                return substr($filename, 0, -(strlen($ext) + 1));
+            }
+        }
+
+        return pathinfo($filename, PATHINFO_FILENAME);
     }
 
     /**
@@ -176,11 +253,18 @@ class UploadedFile implements UploadedFileInterface
      *
      * Las implementaciones DEBERÍAN devolver el valor almacenado en la clave "name" de
      * el archivo en el array $_FILES.
+     *
+     * @param string $filename Nuevo nombre base (sin extensión)
      */
     public function setFilename(string $filename): void
     {
-        $ext= explode('.',$this->getFilename());
-        $this->name = "$filename.".end($ext);
+        $extension = $this->getExtension($this->getClientFilename());
+        
+        if ($extension !== null) {
+            $this->name = "$filename.$extension";
+        } else {
+            $this->name = $filename;
+        }
     }
 
     /**
