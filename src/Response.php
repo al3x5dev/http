@@ -2,6 +2,8 @@
 
 namespace Mk4U\Http;
 
+use Psr\Http\Message\ResponseInterface;
+
 /**
  * Response class
  * 
@@ -20,7 +22,7 @@ namespace Mk4U\Http;
  * de manera que conserven el estado interno del mensaje actual y devuelvan una instancia que contenga 
  * el estado cambiado.
  */
-class Response
+class Response extends Message implements ResponseInterface
 {
     /** @param int código de estado HTTP*/
     protected int $code;
@@ -28,30 +30,30 @@ class Response
     /** @param string frase de motivo de respuesta asociada con el código de estado*/
     protected string $phrase;
 
-    /** @param mixed cuerpo del mensaje http*/
-    protected mixed $body;
-
-    use Headers;
-
     public function __construct(mixed $content = "", Status|array $status = Status::Ok, array $headers = [], ?string $version = null)
     {
 
         //version protocolo
-        $this->setProtocolVersion($version);
+        $this->version = !is_null($version) ? "HTTP/$version" : 'HTTP/1.1';
+
 
         if (is_array($status)) {
-            //especifica el codigo de estado con la frase de motivo
-            $this->setStatus($status[0], $status[1]);
+            if (!isset($status[0]) || !isset($status[1])) {
+                throw new \InvalidArgumentException('Status array must contain [code, phrase]');
+            }
+            $this->code = $status[0];
+            $this->phrase = $status[1];
         } else {
-            //especifica el codigo de estado con la frase de motivo por defecto
-            $this->setStatus($status->value);
+            $this->code = $status->value;
+            $this->phrase = Status::phrase($this->code);
         }
 
         //establecer cabeceras
-        $this->setHeaders($headers);
+        $this->headers = $headers;
 
         //establecer cuerpo del mensaje
-        $this->setBody($content);
+        $this->body = new Stream('php://temp', 'r+');
+        $this->body->write((string) $content);
     }
 
     public function __toString(): string
@@ -65,7 +67,7 @@ class Response
     public function __debugInfo(): array
     {
         return [
-            "protocol" => $this->getprotocolVersion(),
+            "protocol" => $this->getProtocolVersion(),
             "code"     => $this->getStatusCode(),
             "phrase"   => $this->getReasonPhrase(),
             "headers"  => $this->getHeaders(),
@@ -101,16 +103,18 @@ class Response
      * @return static
      * @throws \InvalidArgumentException Para argumentos de código de estado no válidos.
      */
-    public function setStatus(int $code, string $reasonPhrase = ''): Response
+    public function withStatus(int $code, string $reasonPhrase = ''): ResponseInterface
     {
+        $new = clone $this;
+
         if ($code < 100 || $code > 599) {
             throw new \InvalidArgumentException("Invalid status code arguments");
         }
 
-        $this->code = $code;
-        $this->phrase = empty($reasonPhrase) ? Status::phrase($code) : $reasonPhrase;
+        $new->code = $code;
+        $new->phrase = empty($reasonPhrase) ? Status::phrase($code) : $reasonPhrase;
 
-        return clone $this;
+        return $new;
     }
 
     /**
@@ -132,23 +136,6 @@ class Response
     }
 
     /**
-     * Devuelve cuerpo del mensaje
-     */
-    public function getBody(): mixed
-    {
-        return $this->body;
-    }
-
-    /**
-     * Establece cuerpo del mensaje
-     */
-    public function setBody(mixed $body): Response
-    {
-        $this->body = $body;
-        return clone $this;
-    }
-
-    /**
      * Envia el mensaje HTTP
      */
     protected function send(): string
@@ -156,10 +143,16 @@ class Response
         header($this->getProtocolVersion() . ' ' . $this->getStatusCode() . ' ' . $this->getReasonPhrase());
 
         foreach ($this->getHeaders() as $name => $value) {
-            header("$name: $value");
+            if (is_array($value)) {
+                foreach ($value as $v) {
+                    header("$name: $v", false);
+                }
+            } else {
+                header("$name: $value");
+            }
         }
 
-        return $this->getBody();
+        return (string) $this->getBody();
     }
 
     /**
