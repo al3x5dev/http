@@ -39,6 +39,8 @@ class Request extends Message implements RequestInterface
         $body = null,
         ?string $version = null
     ) {
+        parent::__construct();
+
         // Version HTTP
         $this->version = !is_null($version) ? "HTTP/$version" : 'HTTP/1.1';
 

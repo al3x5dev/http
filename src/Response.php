@@ -32,6 +32,7 @@ class Response extends Message implements ResponseInterface
 
     public function __construct(mixed $content = "", Status|array $status = Status::Ok, array $headers = [], ?string $version = null)
     {
+        parent::__construct();
 
         //version protocolo
         $this->version = !is_null($version) ? "HTTP/$version" : 'HTTP/1.1';
@@ -52,7 +53,7 @@ class Response extends Message implements ResponseInterface
         $this->headers = $headers;
 
         //establecer cuerpo del mensaje
-        $this->body = new Stream('php://temp', 'r+');
+        //$this->body = new Stream('php://temp', 'r+');
         $this->body->write((string) $content);
     }
 
