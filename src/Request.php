@@ -2,16 +2,16 @@
 
 namespace Mk4U\Http;
 
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\UriInterface;
+
 /**
  * Request class
  */
-class Request
+class Request extends Message implements RequestInterface
 {
     /** @param array datos de carga de archivos*/
     private array $files;
-
-    /** @param string solicitud de destino de la peticion Http*/
-    private string $target;
 
     /** @param string Metodo HTTP*/
     private string $method;
@@ -23,12 +23,11 @@ class Request
     private array $form_content_type = ['application/x-www-form-urlencoded', 'multipart/form-data'];
 
     /** @param mixed $content Contenido de la solicitud HTTP */
-    private mixed $content = null;
+    private mixed $content;
 
     /** @param array $output Datos parseados del cuerpo del mensaje*/
     private ?array $output = null;
 
-    use Headers;
 
     /**
      * Crea un nuevo objeto Request
@@ -40,25 +39,24 @@ class Request
         $body = null,
         ?string $version = null
     ) {
-        //metodo
-        $this->setMethod($method);
+        // Version HTTP
+        $this->version = !is_null($version) ? "HTTP/$version" : 'HTTP/1.1';
 
-        //URI
+        // Metodo
+        $this->method = strtoupper($method);
+
+        // URI
         if ($uri instanceof Uri) {
-            $setUri = $uri;
+            $this->uri = $uri;
         } else {
-            $setUri = new Uri($uri);
+            $this->uri = Uri::fromString($uri);
         }
-        $this->setUri($setUri);
 
-        //Headers
-        $this->setHeaders($headers);
+        // Headers
+        $this->headers = $headers;
 
-        //Content
+        // Content
         $this->content = $body;
-
-        //Vesion Http
-        $this->setProtocolVersion($version);
     }
 
     /**
@@ -78,15 +76,15 @@ class Request
     /**
      * Crea un nuevo objeto Request a partir de las superglobales
      */
-    public static function create(): static
+    public static function create(): RequestInterface
     {
         //URI
         $uri = (new Uri())
-            ->setScheme(self::server('request_scheme'))
-            ->setHost(self::server('http_host'))
-            ->setPort(self::server('server_port'))
-            ->setPath(self::server('request_uri'))
-            ->setQuery(self::server('query_string'));
+            ->withScheme(self::server('request_scheme'))
+            ->withHost(self::server('http_host'))
+            ->withPort(self::server('server_port'))
+            ->withPath(self::server('request_uri'))
+            ->withQuery(self::server('query_string'));
 
         $request = new static(
             self::server('request_method'),
@@ -116,8 +114,31 @@ class Request
      */
     public function getTarget(): string
     {
-        $this->target = $this->uri->getPath();
-        return isset($this->target) ? $this->target : '/';
+        $target = $this->uri->getPath();
+        return ($target !== '') ? $target : '/';
+    }
+
+    /**
+     * Obtiene el objetivo de la solicitud según PSR-7
+     * 
+     * @return string El objetivo de la solicitud
+     */
+    public function getRequestTarget(): string
+    {
+        return $this->getTarget();
+    }
+
+    /**
+     * Devuelve una instancia con el objetivo de solicitud especificado
+     * 
+     * @param string $requestTarget El objetivo de la solicitud
+     * @return static Nueva instancia con el objetivo especificado
+     */
+    public function withRequestTarget(string $requestTarget): RequestInterface
+    {
+        $new = clone $this;
+        $new->uri = $this->uri->withPath($requestTarget);
+        return $new;
     }
 
     /**
@@ -129,12 +150,16 @@ class Request
     }
 
     /**
-     * Establecer metodo http
+     * Devuelve una instancia con el método especificado
+     * 
+     * @param string $method Metodo HTTP
+     * @return static Nueva instancia con el metodo especificado
      */
-    public function setMethod(string $method): Request
+    public function withMethod(string $method): RequestInterface
     {
-        $this->method = strtoupper($method);
-        return clone $this;
+        $new = clone $this;
+        $new->method = strtoupper($method);
+        return $new;
     }
 
     /**
@@ -148,23 +173,41 @@ class Request
     /**
      * Obtener Uri
      */
-    public function getUri(): Uri
+    public function getUri(): UriInterface
     {
         return $this->uri;
     }
 
     /**
-     * Establecer Uri
+     * Devuelve una instancia con la URI especificada
+     * 
+     * @param UriInterface $uri Nueva URI
+     * @param bool $preserveHost Si true, preserva el host original
+     * @return static Nueva instancia con la URI especificada
      */
-    public function setUri(Uri $uri, bool $preserv_host = false): Request
+    public function withUri(UriInterface $uri, bool $preserveHost = false): RequestInterface
     {
-        $this->uri = $uri;
-
-        if (!$preserv_host || !$this->hasHeader('host') || $this->getHeader('host') != '') {
-            $this->setHeader('host', $uri->getHost());
+        $new = clone $this;
+        
+        if ($uri instanceof Uri) {
+            $new->uri = $uri;
+        } else {
+            $new->uri = new Uri(
+                $uri->getScheme(),
+                $uri->getUserInfo(),
+                $uri->getHost(),
+                $uri->getPort(),
+                $uri->getPath(),
+                $uri->getQuery(),
+                $uri->getFragment()
+            );
         }
 
-        return clone $this;
+        if (!$preserveHost) {
+            $new->headers[$new->sanitizeHeader('Host')] = $uri->getHost();
+        }
+
+        return $new;
     }
 
     /**
@@ -291,11 +334,11 @@ class Request
     private static function createUploadedFile(array $value): UploadedFile
     {
         return new UploadedFile(
-            $value["name"],
-            $value["type"],
             $value["tmp_name"],
             $value["error"],
-            $value["size"]
+            $value["size"],
+            $value["name"] ?? null,
+            $value["type"] ?? null
         );
     }
 
