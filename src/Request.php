@@ -103,7 +103,7 @@ class Request extends Message implements RequestInterface
      */
     public static function server(string $index = ''): array|string
     {
-        return empty($index) ? $_SERVER : (empty($_SERVER[strtoupper($index)]) ? '' : $_SERVER[strtoupper($index)]);
+        return empty($index) ? $_SERVER : ($_SERVER[strtoupper($index)] ?? '');
     }
 
     /**
@@ -204,7 +204,7 @@ class Request extends Message implements RequestInterface
         }
 
         if (!$preserveHost) {
-            $new->headers[$new->sanitizeHeader('Host')] = $uri->getHost();
+            $new->headers['Host'] = $uri->getHost();
         }
 
         return $new;
@@ -235,7 +235,7 @@ class Request extends Message implements RequestInterface
      **/
     public function isFormData(): bool
     {
-        $content_type = explode(';', $this->getHeader('content-type'))[0];
+        $content_type = explode(';', $this->getHeaderLine('content-type'))[0];
         return ($this->hasMethod('POST') && in_array($content_type, $this->form_content_type));
     }
 
@@ -293,8 +293,8 @@ class Request extends Message implements RequestInterface
 
         //Si hay contenido en la propiedad content, intentamos deserializarlo
         if (!is_null($this->content)) {
-            parse_str($this->content, $this->output);
-            return $this->params($this->output, $name, $default);
+            parse_str($this->content, $output);
+            return $this->params($output, $name, $default);
         }
 
         //Si no hay contenido, devolvemos null o el valor por defecto
@@ -306,7 +306,7 @@ class Request extends Message implements RequestInterface
      **/
     public function jsonData(bool $assoc = true): array|object|null
     {
-        if ($this->getHeader('content-type') == 'application/json') {
+        if ($this->getHeaderLine('content-type') === 'application/json') {
             return json_decode($this->content, $assoc, flags: JSON_THROW_ON_ERROR);
         }
         return null;
