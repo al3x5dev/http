@@ -10,9 +10,6 @@ class Request
     /** @param array datos de carga de archivos*/
     private array $files;
 
-    /** @param string solicitud de destino de la peticion Http*/
-    private string $target;
-
     /** @param string Metodo HTTP*/
     private string $method;
 
@@ -43,13 +40,10 @@ class Request
         //metodo
         $this->setMethod($method);
 
-        //URI
-        if ($uri instanceof Uri) {
-            $setUri = $uri;
-        } else {
-            $setUri = new Uri($uri);
-        }
-        $this->setUri($setUri);
+        // URI
+        $this->setUri(
+            $uri instanceof Uri ? $uri : Uri::fromString($uri)
+        );
 
         //Headers
         $this->setHeaders($headers);
@@ -88,13 +82,15 @@ class Request
             ->setPath(self::server('request_uri'))
             ->setQuery(self::server('query_string'));
 
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+
         $request = new static(
             self::server('request_method'),
             $uri,
-            getallheaders()
+            $headers
         );
 
-        //Content
+        // Content
         $request->getContent();
 
         return $request;
@@ -105,19 +101,18 @@ class Request
      */
     public static function server(string $index = ''): array|string
     {
-        return empty($index) ? $_SERVER : (empty($_SERVER[strtoupper($index)]) ? '' : $_SERVER[strtoupper($index)]);
+        return empty($index) ? $_SERVER : ($_SERVER[strtoupper($index)] ?? '');
     }
 
     /**
      * Obtener solicitud de destino
      * 
-     * @see http://tools.ietf.org/html/rfc7230#section-5.3 (para los diversos
-     * formularios de destino de solicitud permitidos en mensajes de solicitud)
+     * @see http://tools.ietf.org/html/rfc7230#section-5.3
      */
     public function getTarget(): string
     {
-        $this->target = $this->uri->getPath();
-        return isset($this->target) ? $this->target : '/';
+        $target = $this->uri->getPath();
+        return ($target !== '') ? $target : '/';
     }
 
     /**
@@ -134,7 +129,7 @@ class Request
     public function setMethod(string $method): Request
     {
         $this->method = strtoupper($method);
-        return clone $this;
+        return $this;
     }
 
     /**
@@ -142,7 +137,7 @@ class Request
      */
     public function hasMethod(string $method): bool
     {
-        return (strcasecmp($this->method, $method) == 0);
+        return strcasecmp($this->method, $method) === 0;
     }
 
     /**
@@ -156,25 +151,25 @@ class Request
     /**
      * Establecer Uri
      */
-    public function setUri(Uri $uri, bool $preserv_host = false): Request
+    public function setUri(Uri $uri, bool $preserveHost = false): Request
     {
         $this->uri = $uri;
 
-        if (!$preserv_host || !$this->hasHeader('host') || $this->getHeader('host') != '') {
+        if (!$preserveHost || !$this->hasHeader('host') || $this->getHeaderLine('host') === '') {
             $this->setHeader('host', $uri->getHost());
         }
 
-        return clone $this;
+        return $this;
     }
 
     /**
      * Obtener cuerpo del mensaje HTTP
-     **/
+     */
     private function getContent(): void
     {
         //contenido
         if (
-            in_array($this->getMethod(), ['PUT', 'DELETE', 'PATCH'])
+            in_array($this->getMethod(), ['PUT', 'DELETE', 'PATCH'], true)
             ||
             ($this->hasMethod('POST') && !$this->isFormData())
         ) {
@@ -189,18 +184,20 @@ class Request
 
     /**
      * Determina si los valores son pasados a traves de un formulario
-     **/
+     */
     public function isFormData(): bool
     {
-        $content_type = explode(';', $this->getHeader('content-type'))[0];
-        return ($this->hasMethod('POST') && in_array($content_type, $this->form_content_type));
+        $content_type = explode(';', $this->getHeaderLine('content-type'))[0];
+        return ($this->hasMethod('POST') && in_array($content_type, $this->form_content_type, true));
     }
 
     /**
      * Obtener parámetros
      *
-     * En caso de no especificar el parametro a devolver este metodo devuelve 
-     * todos los valores del $params propiedad. Puede agregarle valores por defecto en caso de 
+     * En caso de no especificar el parametro a devolver, devuelve todos los valores 
+     * del $params propiedad. 
+     * 
+     * Puede agregarle valores por defecto en caso de 
      * que $params[$name] no este definido.
      **/
     private function params(array $params, ?string $name = null, mixed $default = null): mixed
@@ -209,18 +206,16 @@ class Request
             return $params;
         }
 
-        if (isset($params[$name])) {
-            return $params[$name];
-        }
-
-        return $default;
+        return $params[$name] ?? $default;
     }
 
     /**
      * Obtener parámetros en la cadena de consulta de la URI
      *
-     * En caso de no especificar el parametro a devolver este metodo devuelve 
-     * todos los valores de la superglobal $_GET. Puede agregarle valores a $_GET especificando 
+     * En caso de no especificar el parametro a devolver este metodo 
+     * devuelve todos los valores de la superglobal $_GET.
+     * 
+     * Puede agregarle valores a $_GET especificando 
      * el nombre del parametro y el valor.
      * 
      * Tenga en cuenta que funciona para todas las solicitudes con una cadena de consulta.
@@ -249,9 +244,9 @@ class Request
         }
 
         //Si hay contenido en la propiedad content, intentamos deserializarlo
-        if (!is_null($this->content)) {
-            parse_str($this->content, $this->output);
-            return $this->params($this->output, $name, $default);
+        if ($this->content !== null) {
+            parse_str($this->content, $output);
+            return $this->params($output, $name, $default);
         }
 
         //Si no hay contenido, devolvemos null o el valor por defecto
@@ -260,10 +255,10 @@ class Request
 
     /**
      * Devuelve JSON decodificado
-     **/
+     */
     public function jsonData(bool $assoc = true): array|object|null
     {
-        if ($this->getHeader('content-type') == 'application/json') {
+        if ($this->getHeaderLine('content-type') === 'application/json') {
             return json_decode($this->content, $assoc, flags: JSON_THROW_ON_ERROR);
         }
         return null;
@@ -271,7 +266,7 @@ class Request
 
     /**
      * Devuelve el cuerpo de la solicitud sin tratar
-     **/
+     */
     public function rawData(): ?string
     {
         return $this->content;
@@ -282,7 +277,7 @@ class Request
      */
     public function files(): array
     {
-        return $this->files ??  [];
+        return $this->files ?? [];
     }
 
     /**
@@ -308,15 +303,13 @@ class Request
         foreach ($uploadFiles as $key => $file) {
             if (is_array($file['name'])) {
                 foreach ($file['name'] as $i => $name) {
-                    $this->files[$key][] = self::createUploadedFile(
-                        [
-                            'name'     => $file['name'][$i]      ?? null,
-                            'type'     => $file['type'][$i]      ?? null,
-                            'tmp_name' => $file['tmp_name'][$i]  ?? null,
-                            'error'    => $file['error'][$i]     ?? null,
-                            'size'     => $file['size'][$i]      ?? null,
-                        ]
-                    );
+                    $this->files[$key][] = self::createUploadedFile([
+                        'name'     => $file['name'][$i]      ?? null,
+                        'type'     => $file['type'][$i]      ?? null,
+                        'tmp_name' => $file['tmp_name'][$i]  ?? null,
+                        'error'    => $file['error'][$i]     ?? null,
+                        'size'     => $file['size'][$i]      ?? null,
+                    ]);
                 }
             } else {
                 $this->files[$key] = self::createUploadedFile($file);
