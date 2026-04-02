@@ -11,7 +11,7 @@ trait Headers
     protected string $version = 'HTTP/1.1';
 
     /** @param array version del protocolo http*/
-    protected const VERSIONS = ['1.0', '1.1', '2', '3'];
+    protected const VERSIONS = ['1.0', '1.1', '2.0', '3.0'];
 
     /** @param array headers del mensaje http*/
     protected array $headers = [];
@@ -31,7 +31,7 @@ trait Headers
     {
         // Si la versión es nula, no se establece nada y se retorna la instancia actual
         if ($version === null) {
-            return clone $this; // No se establece nada si la versión es nula 
+            return $this; // No se establece nada si la versión es nula 
         }
 
         // Validar que la versión sea una de las permitidas
@@ -42,7 +42,7 @@ trait Headers
         // Asignar la versión
         $this->version = "HTTP/$version";
 
-        return clone $this; // Retornar la instancia actual
+        return $this; // Retornar la instancia actual
     }
 
     /**
@@ -54,14 +54,19 @@ trait Headers
     }
 
     /**
-     * Mostrar cabecera
+     * Obtiene una cabecera específica como array
+     *
+     * @param string $name Nombre de la cabecera
+     * @return array Array con los valores de la cabecera
      */
-    public function getHeader(string $name): string
+    public function getHeader(string $name): array
     {
-        if ($this->hasHeader($name)) {
-            return $this->headers[$this->sanitizeHeader($name)];
+        if (!$this->hasHeader($name)) {
+            return [];
         }
-        return '';
+        
+        $value = $this->headers[$this->sanitizeHeader($name)];
+        return is_array($value) ? $value : [$value];
     }
 
     /**
@@ -69,7 +74,20 @@ trait Headers
      */
     public function hasHeader(string $name): bool
     {
-        return key_exists($this->sanitizeHeader($name), $this->headers);
+        return isset($this->headers[$this->sanitizeHeader($name)]);
+    }
+
+    /**
+     * Obtiene una cabecera específica como string
+     *
+     * Los valores son concatenados con coma.
+     *
+     * @param string $name Nombre de la cabecera
+     * @return string Valores de la cabecera concatenados con coma
+     */
+    public function getHeaderLine(string $name): string
+    {
+        return implode(', ', $this->getHeader($name));
     }
 
     /**
@@ -79,7 +97,7 @@ trait Headers
     {
         $this->headers[$this->sanitizeHeader($name)] = $value;
 
-        return clone $this;
+        return $this;
     }
 
     /**
@@ -91,7 +109,7 @@ trait Headers
             $this->setHeader($name, $value);
         }
 
-        return clone $this;
+        return $this;
     }
 
     /**
@@ -121,7 +139,7 @@ trait Headers
         }
 
         $this->headers[$key] = $current;
-        return clone $this;
+        return $this;
     }
 
     /**
@@ -130,7 +148,7 @@ trait Headers
     public function removeHeader(string $name): static
     {
         if ($this->hasHeader($name)) unset($this->headers[$this->sanitizeHeader($name)]);
-        return clone $this;
+        return $this;
     }
 
     /**
