@@ -286,11 +286,11 @@ class Request
     private static function createUploadedFile(array $value): UploadedFile
     {
         return new UploadedFile(
+            $value["tmp_name"],
+            $value["size"],
             $value["name"],
             $value["type"],
-            $value["tmp_name"],
-            $value["error"],
-            $value["size"]
+            $value["error"]
         );
     }
 

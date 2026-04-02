@@ -2,82 +2,109 @@
 
 namespace Mk4U\Http;
 
-use InvalidArgumentException;
-use RuntimeException;
-
 /**
  * Uploaded File class
  */
 class UploadedFile
 {
+    private const ERROR_MAP = [
+        UPLOAD_ERR_OK         => 'UPLOAD_ERR_OK',
+        UPLOAD_ERR_INI_SIZE   => 'UPLOAD_ERR_INI_SIZE',
+        UPLOAD_ERR_FORM_SIZE => 'UPLOAD_ERR_FORM_SIZE',
+        UPLOAD_ERR_PARTIAL   => 'UPLOAD_ERR_PARTIAL',
+        UPLOAD_ERR_NO_FILE   => 'UPLOAD_ERR_NO_FILE',
+        UPLOAD_ERR_NO_TMP_DIR => 'UPLOAD_ERR_NO_TMP_DIR',
+        UPLOAD_ERR_CANT_WRITE => 'UPLOAD_ERR_CANT_WRITE',
+        UPLOAD_ERR_EXTENSION => 'UPLOAD_ERR_EXTENSION',
+    ];
+
     private ?Stream $stream = null;
     private bool $moved = false;
+    private ?string $file = null;
 
     public function __construct(
+        private $streamOrFile,
+        private ?int $size,
         private ?string $name = null,
         private ?string $type = null,
-        private string $tmp_name,
-        private int $error,
-        private ?int $size
-    ) {}
+        private int $error = UPLOAD_ERR_OK
+    ) {
+        $this->setError($error);
+
+        // Solo inicializar stream/file si no hay error
+        if ($this->isOk()) {
+            $this->setStreamOrFile($streamOrFile);
+        }
+    }
 
     /**
-     * Mover el archivo subido a una nueva ubicación.
-     *
-     * Utilice este método como alternativa a move_uploaded_file(). Este método
-     * garantizado para funcionar tanto en entornos SAPI como no SAPI.
-     * Las implementaciones deben determinar en qué entorno se encuentran y utilizar el
-     * método apropiado (move_uploaded_file(), rename(), o una operación
-     * para realizar la operación.
-     *
-     * $targetPath puede ser una ruta absoluta o relativa. Si es una
-     * relativa, la resolución debe ser la misma que la usada por la función rename()
-     * de PHP.
-     *
-     * El archivo o flujo original DEBE ser eliminado al finalizar.
-     *
-     * Si este método es llamado más de una vez, cualquier llamada subsecuente DEBE lanzar una excepción.
-     *
-     * Cuando se usa en un entorno SAPI donde $_FILES está poblado, cuando se escribe
-     * archivos a través de moveTo(), is_uploaded_file() y move_uploaded_file() DEBERÍAN ser
-     * usadas para asegurar que los permisos y el estado de subida son verificados correctamente.
-     *
-     * Si desea pasar a un flujo, utilice getStream(), ya que las operaciones SAPI
-     * no pueden garantizar la escritura en destinos de flujo.
-     *
-     * @see http://php.net/is_uploaded_file
-     * @see http://php.net/move_uploaded_file
-     * @param string $targetPath Ruta a la que mover el fichero subido.
-     * @throws InvalidArgumentException si el $targetPath especificado no es válido.
-     * @throws RuntimeException en cualquier error durante la operación de mover, o en
-     * la segunda o subsiguiente llamada al método.
+     * Configura el stream o archivo según el tipo de dato recibido
+     * 
+     * @param mixed $streamOrFile StreamInterface, string, resource o Stream
+     * @throws InvalidArgumentException Si el tipo no es válido
      */
-    public function moveTo(string $targetPath): void
+    private function setStreamOrFile($streamOrFile): void
     {
+        if (is_string($streamOrFile)) {
+            $this->file = $streamOrFile;
+        } elseif (is_resource($streamOrFile)) {
+            $this->stream = new Stream($streamOrFile);
+        } elseif ($streamOrFile instanceof Stream) {
+            $this->stream = $streamOrFile;
+        } elseif ($streamOrFile instanceof Stream) {
+            $this->stream = $streamOrFile;
+        } else {
+            throw new \InvalidArgumentException(
+                'Invalid stream or file provided for UploadedFile'
+            );
+        }
+    }
+
+    /**
+     * Valida y configura el código de error
+     * 
+     * @param int $error Código de error
+     * @throws InvalidArgumentException Si el código no es válido
+     */
+    private function setError(int $error): void
+    {
+        if (!isset(self::ERROR_MAP[$error])) {
+            throw new \InvalidArgumentException(
+                'Invalid error status for UploadedFile: ' . $error
+            );
+        }
+        $this->error = $error;
+    }
+
+    /**
+     * Verifica si no hay error de upload
+     */
+    private function isOk(): bool
+    {
+        return $this->error === UPLOAD_ERR_OK;
+    }
+
+    /**
+     * Valida que el archivo esté activo y listo para operar
+     * 
+     * @throws RuntimeException Si hay error de upload o ya fue movido
+     */
+    private function validateActive(): void
+    {
+        if (!$this->isOk()) {
+            throw new \RuntimeException(
+                sprintf(
+                    'Cannot retrieve stream due to upload error (%s)',
+                    self::ERROR_MAP[$this->error]
+                )
+            );
+        }
+
         if ($this->moved) {
-            throw new RuntimeException('File has already been moved');
+            throw new \RuntimeException(
+                'Cannot retrieve stream after it has already been moved'
+            );
         }
-
-        if (!$this->uploadOk()) {
-            throw new RuntimeException("An error occurred during the move operation.");
-        }
-
-        if (empty($targetPath)) {
-            throw new InvalidArgumentException('Target path must be a non-empty string.');
-        }
-
-        if (!is_dir($targetPath)) {
-            throw new InvalidArgumentException('Target path must be a valid directory.');
-        }
-
-        $filename = $this->sanitizeFilename($this->getFilename());
-        $targetPath = rtrim($targetPath, '/\\');
-
-        if (!move_uploaded_file($this->tmp_name, "$targetPath/$filename")) {
-            throw new RuntimeException('Error moving uploaded file.');
-        }
-
-        $this->moved = true;
     }
 
     /**
@@ -89,14 +116,92 @@ class UploadedFile
             return 'uploaded_file';
         }
 
+        // Eliminar caracteres de control
         $filename = preg_replace('/[\x00-\x1F\x7F]/', '', $filename);
+
+        // Obtener solo el nombre base (eliminar directorios)
         $filename = basename($filename);
 
+        // Verificar que no sea vacío o solo puntos
         if ($filename === '' || $filename === '.') {
             return 'uploaded_file';
         }
 
         return $filename;
+    }
+
+    /**
+     * Mover el archivo subido a una nueva ubicación.
+     *
+     * Este método funciona tanto en entornos SAPI como CLI.
+     * En SAPI usa move_uploaded_file() para seguridad.
+     * En CLI usa rename() para velocidad.
+     * 
+     * Utilice este método como alternativa a move_uploaded_file().
+     * 
+     * @see http://php.net/is_uploaded_file
+     * @see http://php.net/move_uploaded_file
+     * 
+     * @param string $targetPath Ruta destino (directorio donde mover)
+     * @throws InvalidArgumentException Si el path no es válido
+     * @throws RuntimeException Si hay error de upload, ya fue movido, o falla el movimiento
+     */
+    public function moveTo(string $targetPath): void
+    {
+        $this->validateActive();
+
+        // Validar que targetPath sea string no vacío
+        if (empty($targetPath)) {
+            throw new \InvalidArgumentException(
+                'Invalid path provided for move operation; must be a non-empty string'
+            );
+        }
+
+        // Validar que targetPath sea un directorio válido
+        if (!is_dir($targetPath)) {
+            throw new \InvalidArgumentException(
+                'Target path must be a valid directory'
+            );
+        }
+
+        // Sanitizar nombre de archivo del cliente
+        $filename = $this->sanitizeFilename($this->getClientFilename());
+        $targetPath = rtrim($targetPath, '/\\');
+        $targetFile = "$targetPath/$filename";
+
+        // Si tenemos archivo (no stream), mover directamente
+        if ($this->file) {
+            // Verificar que el archivo existe y es legible
+            if (!is_file($this->file) || !is_readable($this->file)) {
+                throw new \RuntimeException('Source file does not exist or is not readable');
+            }
+
+            // En CLI usamos rename, en SAPI usamos move_uploaded_file
+            $this->moved = (PHP_SAPI === 'cli')
+                ? rename($this->file, $targetFile)
+                : move_uploaded_file($this->file, $targetFile);
+        } else {
+            // Es un stream - copiar contenido al destino
+            $source = $this->getStream();
+            $target = new Stream($targetFile, 'w');
+
+            // Copiar stream origen a destino eficientemente
+            while (!$source->eof()) {
+                $data = $source->read(8192);
+                if ($data !== '') {
+                    $target->write($data);
+                }
+            }
+
+            $this->moved = true;
+        }
+
+        // Verificar que el movimiento fue exitoso
+        if (!$this->moved) {
+            throw new \RuntimeException(
+                sprintf('Uploaded file could not be moved to %s', $targetFile)
+            );
+        }
     }
 
     /**
@@ -107,18 +212,15 @@ class UploadedFile
      */
     public function getStream(): Stream
     {
-        if ($this->moved) {
-            throw new RuntimeException('File has already been moved');
+        $this->validateActive();
+
+        // Si ya tenemos stream, retornarlo
+        if ($this->stream instanceof Stream) {
+            return $this->stream;
         }
 
-        if ($this->stream === null) {
-            if ($this->tmp_name === '' || !is_file($this->tmp_name)) {
-                throw new RuntimeException('No stream available');
-            }
-            $this->stream = new Stream($this->tmp_name, 'r');
-        }
-
-        return $this->stream;
+        // Es un archivo - crear LazyOpenStream para abrir solo cuando se use
+        return new Stream($this->file, 'r');
     }
 
     /**
@@ -146,7 +248,7 @@ class UploadedFile
      */
     public function getFilename(): ?string
     {
-        return $this->name;
+        return $this->getClientFilename();
     }
 
     /**
@@ -154,7 +256,7 @@ class UploadedFile
      */
     public function getClientFilename(): ?string
     {
-        return $this->getFilename();
+        return $this->name;
     }
 
     /**
@@ -238,7 +340,7 @@ class UploadedFile
      */
     public function getMediaType(): ?string
     {
-        return $this->type;
+        return $this->getClientMediaType();
     }
 
     /**
@@ -246,7 +348,15 @@ class UploadedFile
      */
     public function getClientMediaType(): ?string
     {
-        return $this->getMediaType();
+        return $this->type;
+    }
+
+    /**
+     * Verifica si el archivo fue movido exitosamente.
+     */
+    public function isMoved(): bool
+    {
+        return $this->moved;
     }
 
     /**
@@ -254,6 +364,6 @@ class UploadedFile
      */
     public function uploadOk(): bool
     {
-        return $this->error === UPLOAD_ERR_OK;
+        return $this->isOk();
     }
 }
