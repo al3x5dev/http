@@ -307,7 +307,7 @@ class Uri
     private static function normalizedPort(?int $port = null, string $scheme = ''): ?int
     {
         if (!is_null($port) && ($port < 1 || $port > 65535)) {
-            throw new \InvalidArgumentException(sprintf('Invalid port: %d. It must be between 0 and 65535', $port));
+            throw new \InvalidArgumentException(sprintf('Invalid port: %d. It must be between 1 and 65535', $port));
         }
 
         if ($scheme === '' && is_null($port)) {
