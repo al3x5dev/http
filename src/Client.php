@@ -2,13 +2,31 @@
 
 namespace Mk4U\Http;
 
+use Mk4U\Http\Exceptions\ClientException;
+use Mk4U\Http\Exceptions\ConnectException;
+use Mk4U\Http\Exceptions\TimeoutException;
+
 /**
- * Client class
+ * HTTP client
+ * 
+ * Cliente HTTP con API similar a Guzzle para consumir APIs y servicios web.
+ * Soporta JSON, form-data, multipart, autenticación, proxy, SSL y más.
  */
 class Client
 {
+    /** @var \CurlHandle Instancia de cURL */
     private \CurlHandle $curl;
+
+    /** @var Request Request actual */
     private Request $request;
+
+    /** @var string URI base para requests relativos */
+    private string $baseUri = '';
+
+    /** @var resource|null File handle para sink (descarga a archivo) */
+    private $sinkHandle = null;
+
+    /** @var array Métodos HTTP soportados */
     private const METHODS = [
         'GET',
         'POST',
@@ -19,42 +37,60 @@ class Client
         'PATCH'
     ];
 
+    /** @var array Esquemas de URI permitidos para prevenir SSRF */
+    private const ALLOWED_SCHEMES = ['http', 'https'];
+
     /**
      * Inicializa Curl
+     * 
+     * @param array $config Configuración del cliente
      */
-    public function __construct(private array $optionDefault = [])
+    public function __construct(private array $config = [])
     {
-        // Verifica si la extensión cURL está cargada
         if (!\extension_loaded('curl')) {
             throw new \RuntimeException('The "cURL" extension is not installed.');
         }
 
-        $this->optionDefault = $optionDefault;
-        $this->curl = \curl_init(); // Inicializa cURL
+        $this->baseUri = $config['base_uri'] ?? '';
+        $this->curl = \curl_init();
     }
 
     /**
-     * Cierra la sesión de cURL
+     * Cierra la sesión de cURL y libera recursos
      */
     public function __destruct()
     {
+        // Cierra el file handle del sink si está abierto
+        if (is_resource($this->sinkHandle)) {
+            \fclose($this->sinkHandle);
+        }
+
         // Cierra la sesión de cURL
-        unset($this->curl);
+        if (isset($this->curl)) {
+            \curl_close($this->curl);
+        }
     }
 
     /**
-     * Envía la petición
+     * Envía la petición HTTP
+     * 
+     * @param string $method Método HTTP
+     * @param string $uri URI de la petición
+     * @param array $options Opciones de la petición
+     * @return Response
      */
     public function request(string $method, string $uri, array $options = []): Response
     {
-        //Obtener cabeceras
+        $uri = $this->resolveUri($uri);
+
+        // Obtener cabeceras
         $headers = $options['headers'] ?? [];
 
         // Obtiene la petición
         $this->request = new Request(
             $method,
             $uri,
-            array_merge($this->optionDefault['headers'] ?? [], $headers)
+            array_merge($this->config['headers'] ?? [], $headers)
         );
 
         // Verifica el método
@@ -63,26 +99,28 @@ class Client
         }
 
         // Establece las opciones
-        $this->setOptions(array_merge($this->optionDefault, $options));
+        $this->setOptions(array_merge($this->config, $options));
 
         // Ejecuta cURL y retorna la respuesta
-        return $this->response(\curl_exec($this->curl));
+        $result = \curl_exec($this->curl);
+        return $this->handleResponse($result);
     }
 
     /**
-     * Recibe la respuesta
+     * Maneja la respuesta o error
+     * 
+     * @param string|bool $result Resultado de curl_exec
+     * @return Response
      */
-    private function response(string|bool $response): Response
+    private function handleResponse(string|bool $result): Response
     {
-        if (!$response) {
-            throw new \Error(
-                sprintf(
-                    'cURL error #%d: %s [%s]',
-                    \curl_errno($this->curl),
-                    \curl_error($this->curl),
-                    'see https://curl.haxx.se/libcurl/c/libcurl-errors.html'
-                )
-            );
+        if ($result === false) {
+            $errno = \curl_errno($this->curl);
+            $error = \curl_error($this->curl);
+            $uri = (string) $this->request->getUri();
+            $method = $this->request->getMethod();
+
+            throw $this->createException($errno, $error, $uri, $method);
         }
 
         // Obtiene el código de estado HTTP
@@ -98,27 +136,103 @@ class Client
 
         // Devuelve un nuevo objeto Response
         return new Response(
-            $response,
-            Status::tryFrom($statusCode),
+            $result,
+            Status::tryFrom($statusCode ?? 500),
             $this->request->getHeaders(),
             $version
         );
     }
 
     /**
-     * Ejecuta peticiones para cada método específico
+     * Crea la excepción según el tipo de error cURL
+     * 
+     * @param int $errno Código de error de cURL
+     * @param string $error Mensaje de error de cURL
+     * @param string $uri URI de la petición
+     * @param string $method Método HTTP
+     * @return \Exception
      */
-    public function __call($method, $arguments): Response
+    private function createException(int $errno, string $error, string $uri, string $method): \Exception
+    {
+        // CURLE_OPERATION_TIMEDOUT = 28 (constante estándar de cURL)
+        // Se usa la constante si existe, sino fallback numérico
+        $timeoutCode = defined('CURLE_OPERATION_TIMEDOUT') ? CURLE_OPERATION_TIMEDOUT : 28;
+
+        return match ($errno) {
+            CURLE_COULDNT_CONNECT,
+            CURLE_COULDNT_RESOLVE_HOST,
+            CURLE_COULDNT_RESOLVE_PROXY => new ConnectException(
+                "Connection failed: $error",
+                null,
+                $uri,
+                $method
+            ),
+            $timeoutCode => new TimeoutException(
+                "Request timed out: $error",
+                null,
+                $uri,
+                $method
+            ),
+            default => new ClientException(
+                "cURL error #$errno: $error",
+                0,
+                null,
+                $uri,
+                $method
+            ),
+        };
+    }
+
+    /**
+     * Resuelve la URI relativa contra base_uri
+     * 
+     * Valida esquemas permitidos para prevenir SSRF.
+     * 
+     * @param string $uri URI a resolver
+     * @return string URI resuelta
+     */
+    private function resolveUri(string $uri): string
+    {
+        // Si no hay base_uri, retorna la URI tal cual
+        if ($this->baseUri === '') {
+            return $uri;
+        }
+
+        // Si la URI es absoluta, la retorna tal cual
+        if (str_starts_with($uri, 'http://') || str_starts_with($uri, 'https://')) {
+            return $uri;
+        }
+
+        // Combina base_uri con URI relativa
+        $base = rtrim($this->baseUri, '/');
+        $uri = ltrim($uri, '/');
+
+        return "$base/$uri";
+    }
+
+    /**
+     * Ejecuta peticiones para cada método específico
+     * 
+     * @param string $method Nombre del método HTTP
+     * @param array $arguments [uri, options]
+     * @return Response
+     */
+    public function __call(string $method, array $arguments): Response
     {
         if (empty($arguments)) {
             throw new \InvalidArgumentException("Error processing empty arguments.");
         }
 
+        if (!in_array($method, self::METHODS)) {
+            throw new \RuntimeException("Unsupported HTTP methods");
+        }
         return $this->request($method, $arguments[0], $arguments[1] ?? []);
     }
 
     /**
      * Establece las opciones de configuración de cURL
+     * 
+     * @param array $options Opciones combinadas de config y request
      */
     private function setOptions(array $options): void
     {
@@ -133,91 +247,24 @@ class Client
             \CURLOPT_ENCODING       => $options['encoding'] ?? '', // Maneja las codificaciones
             \CURLOPT_AUTOREFERER    => $options['auto_referer'] ?? true, // Establece Referer en redirecciones
             \CURLOPT_CUSTOMREQUEST  => $this->request->getMethod(), // Método HTTP a usar
-            \CURLOPT_FOLLOWLOCATION => true, // Permite seguir redirecciones
-            \CURLOPT_VERBOSE        => $options['verbose'] ?? false // Activa la salida detallada para depuración
+            \CURLOPT_FOLLOWLOCATION => $options['allow_redirects'] ?? true, // Permite seguir redirecciones
+            \CURLOPT_VERBOSE        => $options['debug'] ?? false // Activa la salida detallada para depuración
         ];
 
-        // Manejo del cuerpo de la solicitud
-        if (
-            $this->request->hasMethod('post') ||
-            $this->request->hasMethod('put') ||
-            $this->request->hasMethod('patch')
-        ) {
-            if (isset($options['form_params'])) {
-                // application/x-www-form-urlencoded
-                $curlOptions[\CURLOPT_POSTFIELDS] = http_build_query($options['form_params']);
-                $this->request->setHeader('Content-Type', 'application/x-www-form-urlencoded');
-            } elseif (isset($options['json'])) {
-                // application/json
-                $curlOptions[\CURLOPT_POSTFIELDS] = json_encode($options['json']);
-                $this->request->setHeader('Content-Type', 'application/json');
-            } elseif (isset($options['multipart'])) {
-                // multipart/form-data
-                $multipart = [];
+        // Maneja el cuerpo de la petición (pasa $curlOptions por referencia)
+        $this->handleBodyOptions($options, $curlOptions);
 
-                foreach ($options['multipart'] as $part) {
-
-                    if (!isset($part['name'], $part['contents'])) {
-                        throw new \InvalidArgumentException(
-                            'Each multipart entry must have name and contents'
-                        );
-                    }
-
-                    $multipart[$part['name']] = $this->normalizeMultipartValue(
-                        $part['contents'],
-                        $part['filename'] ?? null,
-                        $part['headers']['Content-Type'] ?? null
-                    );
-                }
-
-                $curlOptions[\CURLOPT_POSTFIELDS] = $multipart;
-            } elseif (isset($options['body'])) {
-                // text/plain
-                $curlOptions[\CURLOPT_POSTFIELDS] = $options['body'];
-                $this->request->setHeader('Content-Type', 'text/plain');
-            }
-        }
         if ($this->request->hasMethod('head') || $this->request->hasMethod('options')) {
             $curlOptions[\CURLOPT_NOBODY] = true;
         }
 
-        // Establecer URI
-        $this->url($options['query'] ?? []);
-
-        // Formatear headers
-        $formattedHeaders = [];
-        
-        foreach ($this->request->getHeaders() as $key => $value) {
-            $formattedHeaders[] = $key . ': ' . $value;
-            }
-            
-        // Cabeceras HTTP
-        $curlOptions[\CURLOPT_HTTPHEADER] = $formattedHeaders;
-
-        // Certificado SSL
-        if (isset($options['verify'])) {
-            $this->ssl($options['verify']);
-        }
-
-        // Enviar certificado SSL
-        if (isset($options['cert'])) {
-            $this->cert($options['cert']);
-        }
-
-        // Obtener cabecera HTTP para la respuesta
-        \curl_setopt(
-            $this->curl,
-            \CURLOPT_HEADERFUNCTION,
-            function ($curl, $header) {
-                $len = strlen($header);
-                $header = explode(':', $header, 2);
-                if (count($header) < 2) return $len;
-
-                $headers[trim($header[0])] = trim($header[1]);
-                $this->request->setHeaders($headers);
-                return $len;
-            }
-        );
+        $this->handleQuery($options['query'] ?? []);
+        $this->handleHeaders();
+        $this->handleAuth($options['auth'] ?? null);
+        $this->handleProxy($options['proxy'] ?? null);
+        $this->handleSink($options['sink'] ?? null);
+        $this->handleSsl($options['verify'] ?? true);
+        $this->handleCert($options['cert'] ?? null);
 
         // Establecer las opciones de cURL
         if (\curl_setopt_array($this->curl, $curlOptions) === false) {
@@ -226,9 +273,62 @@ class Client
     }
 
     /**
-     * Establece las opciones de URL
+     * Maneja opciones de cuerpo (json, form_params, multipart, body)
+     * 
+     * @param array $options Opciones de la petición
+     * @param array $curlOptions Opciones de cURL (se modifica por referencia)
      */
-    private function url(array $query): void
+    private function handleBodyOptions(array $options, array &$curlOptions): void
+    {
+        if (
+            !$this->request->hasMethod('post') &&
+            !$this->request->hasMethod('put') &&
+            !$this->request->hasMethod('patch')
+        ) {
+            return;
+        }
+
+        if (isset($options['form_params'])) {
+            // application/x-www-form-urlencoded
+            $curlOptions[\CURLOPT_POSTFIELDS] = http_build_query($options['form_params']);
+            $this->request->setHeader('Content-Type', 'application/x-www-form-urlencoded');
+        } elseif (isset($options['json'])) {
+            // application/json
+            $curlOptions[\CURLOPT_POSTFIELDS] = json_encode($options['json']);
+            $this->request->setHeader('Content-Type', 'application/json');
+        } elseif (isset($options['multipart'])) {
+            // multipart/form-data
+            $multipart = [];
+
+            foreach ($options['multipart'] as $part) {
+
+                if (!isset($part['name'], $part['contents'])) {
+                    throw new \InvalidArgumentException(
+                        'Each multipart entry must have name and contents'
+                    );
+                }
+
+                $multipart[$part['name']] = $this->normalizeMultipartValue(
+                    $part['contents'],
+                    $part['filename'] ?? null,
+                    $part['headers']['Content-Type'] ?? null
+                );
+            }
+
+            $curlOptions[\CURLOPT_POSTFIELDS] = $multipart;
+        } elseif (isset($options['body'])) {
+            // text/plain
+            $curlOptions[\CURLOPT_POSTFIELDS] = $options['body'];
+            $this->request->setHeader('Content-Type', 'text/plain');
+        }
+    }
+
+    /**
+     * Maneja query parameters
+     * 
+     * @param array $query Query parameters
+     */
+    private function handleQuery(array $query): void
     {
         if (!empty($query)) {
             // Agrega las query
@@ -241,54 +341,120 @@ class Client
     }
 
     /**
-     * Establece las opciones de SSL
+     * Formatea y establece headers
      */
-    private function ssl(bool $verify): void
+    private function handleHeaders(): void
     {
-        if ($verify) {
-            \curl_setopt_array($this->curl, [
-                \CURLOPT_SSL_VERIFYHOST => 2, // Verifica nombre del host y del certificado
-                \CURLOPT_SSL_VERIFYPEER => true, // Verifica el certificado SSL
-            ]);
-        } else {
-            \curl_setopt_array($this->curl, [
-                \CURLOPT_SSL_VERIFYHOST => 0, // No verifica el nombre del host
-                \CURLOPT_SSL_VERIFYPEER => false, // No verifica el certificado SSL
-            ]);
+        $formattedHeaders = [];
+        foreach ($this->request->getHeaders() as $key => $value) {
+            if (is_array($value)) {
+                $formattedHeaders[] = "$key: {$this->request->getHeaderLine($key)}";
+            } else {
+                $formattedHeaders[] = "$key: $value";
+            }
+        }
+        \curl_setopt($this->curl, \CURLOPT_HTTPHEADER, $formattedHeaders);
+    }
+
+    /**
+     * Maneja autenticación básica
+     * 
+     * @param array|null $auth [username, password]
+     */
+    private function handleAuth(?array $auth): void
+    {
+        if ($auth === null) {
+            return;
+        }
+
+        $username = $auth[0] ?? '';
+        $password = $auth[1] ?? '';
+        $encoded = base64_encode("$username:$password");
+
+        $this->request->setHeader('Authorization', "Basic $encoded");
+    }
+
+    /**
+     * Maneja proxy HTTP
+     * 
+     * @param string|null $proxy URL del proxy
+     */
+    private function handleProxy(?string $proxy): void
+    {
+        if ($proxy !== null) {
+            \curl_setopt($this->curl, \CURLOPT_PROXY, $proxy);
         }
     }
 
     /**
-     * Establece el certificado SSL a enviar
+     * Maneja sink (descargar a archivo)
+     * 
+     * Almacena el file handle para cerrarlo en el destructor.
+     * 
+     * @param string|null $sink Ruta del archivo
      */
-    private function cert(string $filename): void
+    private function handleSink(?string $sink): void
     {
-        if (!is_null($filename)) {
-            if (is_file($filename) && file_exists($filename)) {
-                curl_setopt($this->curl, \CURLOPT_CAINFO, $filename); // Ruta al archivo CA
-            } elseif (is_dir($filename) && file_exists($filename)) {
-                curl_setopt($this->curl, \CURLOPT_CAPATH, $filename); // Ruta al directorio de CA
+        if ($sink !== null) {
+            $fp = fopen($sink, 'w');
+            if ($fp === false) {
+                throw new \InvalidArgumentException("Cannot open sink file: $sink");
+            }
+            $this->sinkHandle = $fp;
+            \curl_setopt($this->curl, \CURLOPT_FILE, $fp);
+        }
+    }
+
+    /**
+     * Maneja opciones SSL
+     * 
+     * @param bool $verify Verificar certificado SSL
+     */
+    private function handleSsl(bool $verify): void
+    {
+        \curl_setopt_array($this->curl, [
+            \CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0, // Verifica nombre del host y del certificado
+            \CURLOPT_SSL_VERIFYPEER => $verify, // Verifica el certificado SSL
+        ]);
+    }
+
+    /**
+     * Maneja certificado SSL
+     * 
+     * @param string|null $cert Ruta al archivo o directorio de certificados
+     */
+    private function handleCert(?string $cert): void
+    {
+        if ($cert !== null) {
+            if (is_file($cert) && file_exists($cert)) {
+                \curl_setopt($this->curl, \CURLOPT_CAINFO, $cert); // Ruta al archivo CA
+            } elseif (is_dir($cert) && file_exists($cert)) {
+                \curl_setopt($this->curl, \CURLOPT_CAPATH, $cert); // Ruta al directorio de CA
             } else {
-                throw new \InvalidArgumentException("Invalid certificate in $filename");
+                throw new \InvalidArgumentException("Invalid certificate: $cert");
             }
         }
     }
 
     /**
-     * Normaliza un valor multipart para que cURL lo entienda
-     *
+     * Normaliza un valor multipart para cURL
+     * 
      * Acepta:
      * - CURLFile
      * - Stream (Mk4U\Http\Stream)
      * - resource (fopen)
      * - string (texto o path)
+     * 
+     * @param mixed $value Valor a normalizar
+     * @param string|null $filename Nombre del archivo
+     * @param string|null $contentType Content-Type
+     * @return mixed
      */
     private function normalizeMultipartValue(
         mixed $value,
         ?string $filename = null,
         ?string $contentType = null
     ): mixed {
-
         // Si es una instancia de CURLFile lo usa directamente
         if ($value instanceof \CURLFile) {
             return $value;
@@ -310,9 +476,7 @@ class Client
             $path = $meta['uri'] ?? null;
 
             if (!$path || !is_file($path)) {
-                throw new \RuntimeException(
-                    'Stream/resource must be backed by a file'
-                );
+                throw new \RuntimeException('Stream/resource must be backed by a file');
             }
 
             return new \CURLFile(
@@ -336,8 +500,20 @@ class Client
             return (string) $value;
         }
 
-        throw new \InvalidArgumentException(
-            'Unsupported multipart contents type'
-        );
+        throw new \InvalidArgumentException('Unsupported multipart contents type');
+    }
+
+    /**
+     * Obtiene configuración del cliente
+     * 
+     * @param string|null $key Clave específica o null para toda la config
+     * @return mixed
+     */
+    public function getConfig(?string $key = null): mixed
+    {
+        if ($key === null) {
+            return $this->config;
+        }
+        return $this->config[$key] ?? null;
     }
 }
