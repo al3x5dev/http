@@ -130,7 +130,7 @@ class Client
         $version = match (\curl_getinfo($this->curl, CURLINFO_HTTP_VERSION)) {
             \CURL_HTTP_VERSION_1_0 => '1.0',
             \CURL_HTTP_VERSION_1_1 => '1.1',
-            \CURL_HTTP_VERSION_2_0 => '2',
+            \CURL_HTTP_VERSION_2_0 => '2.0',
             default => null,
         };
 
