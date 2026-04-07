@@ -107,6 +107,10 @@ class UploadedFile
 
     /**
      * Sanitiza el nombre del archivo para prevenir path traversal.
+     * 
+     * Primero extrae solo el nombre base (eliminando cualquier path),
+     * luego elimina caracteres de control y secuencias de path traversal.
+     * Nota: El desarrollador debe validar el destino final.
      */
     private function sanitizeFilename(?string $filename): string
     {
@@ -114,11 +118,14 @@ class UploadedFile
             return 'uploaded_file';
         }
 
+        // Obtener solo el nombre base (eliminar directorios)
+        $filename = basename($filename);
+
         // Eliminar caracteres de control
         $filename = preg_replace('/[\x00-\x1F\x7F]/', '', $filename);
 
-        // Obtener solo el nombre base (eliminar directorios)
-        $filename = basename($filename);
+        // Eliminar secuencias de path traversal (por si basename no funcionó bien)
+        $filename = str_replace(['..', '/', '\\'], '', $filename);
 
         // Verificar que no sea vacío o solo puntos
         if ($filename === '' || $filename === '.') {

@@ -67,6 +67,9 @@ class Cookie
     /**
      * Obtiene valores escapados de $_COOKIE
      *
+     * Escapa valores para prevenir XSS. Usa ENT_QUOTES | ENT_HTML5 para cobertura
+     * completa de entidades HTML5 y comillas.
+     *
      * @param string|null $name Nombre de la cookie (null para obtener todas)
      * @param mixed $default Valor por defecto si no existe
      * @return mixed Valor de la cookie o array de todas las cookies
@@ -75,13 +78,13 @@ class Cookie
     {
         if ($name === null) {
             return array_map(
-                fn($v) => is_string($v) ? htmlspecialchars($v, ENT_QUOTES, 'UTF-8') : $v,
+                fn($v) => is_string($v) ? htmlspecialchars($v, ENT_QUOTES | ENT_HTML5, 'UTF-8') : $v,
                 $_COOKIE
             );
         }
 
         $value = self::get($name, $default);
-        return is_string($value) ? htmlspecialchars($value, ENT_QUOTES, 'UTF-8') : '';
+        return is_string($value) ? htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8') : '';
     }
 
     /**

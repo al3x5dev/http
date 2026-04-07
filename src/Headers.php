@@ -95,7 +95,7 @@ trait Headers
      */
     public function setHeader(string $name, string|array $value): static
     {
-        $this->headers[$this->sanitizeHeader($name)] = $value;
+        $this->headers[$this->sanitizeHeader($name)] = $this->sanitizeHeaderValue($value);
 
         return $this;
     }
@@ -138,7 +138,7 @@ trait Headers
             $current[] = $value;
         }
 
-        $this->headers[$key] = $current;
+        $this->headers[$key] = $this->sanitizeHeaderValue($current);
         return $this;
     }
 
@@ -157,5 +157,22 @@ trait Headers
     private function sanitizeHeader(string $name): string
     {
         return str_replace(' ', '-', ucwords(str_replace(['-', '_'], ' ', strtolower($name))));
+    }
+
+    /**
+     * Sanitiza el valor de una cabecera para prevenir CRLF injection.
+     * 
+     * Elimina caracteres de control \r y \n que podrían ser usados para
+     * inyectar cabeceras adicionales en respuestas HTTP (HTTP Response Splitting).
+     *
+     * @param string|array $value Valor de la cabecera a sanitizar
+     * @return string|array Valor sanitizado
+     */
+    private function sanitizeHeaderValue(string|array $value): string|array
+    {
+        if (is_array($value)) {
+            return array_map(fn($v) => is_string($v) ? preg_replace('/[\r\n]/', '', $v) : $v, $value);
+        }
+        return preg_replace('/[\r\n]/', '', $value);
     }
 }

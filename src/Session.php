@@ -38,11 +38,14 @@ class Session
         "use_trans_sid" => "boolean",
     ];
 
+    /** @var array Opciones de configuración de sesión usadas en start() */
+    private static array $startOptions = [];
+
     use Flash;
 
     /**
      * Inicializa la session
-     * 
+     *
      * @param array $options Opciones de configuración de sesión
      * @return bool True si la sesión se inició correctamente
      **/
@@ -62,8 +65,12 @@ class Session
             if (!empty($options)) {
                 $options = self::validate($options);
                 $result = session_start(array_merge($defaultOptions, $options));
+                // Guardar opciones para uso futuro
+                self::$startOptions = $options;
             } else {
                 $result = session_start($defaultOptions);
+                // Guardar opciones por defecto para uso futuro
+                self::$startOptions = $defaultOptions;
             }
 
             self::initFlash();
@@ -207,22 +214,37 @@ class Session
     /**
      * Genera un nuevo ID de session
      * 
+     * Cierra la sesión antes de regenerar el ID para prevenir race conditions
+     * y asegurar que los datos se escriban correctamente.
+     * Usa las mismas opciones que session_start() al reiniciar.
+     *
      * @param bool $deleteOldSession Eliminar datos de la sesión antigua
      */
     public static function renewId(bool $deleteOldSession = false): void
     {
         self::requireSession();
+        
+        // Cerrar sesión antes de regenerar para prevenir race conditions
+        session_write_close();
         session_regenerate_id($deleteOldSession);
+        
+        // Reiniciar sesión con las mismas opciones originales
+        session_start(self::$startOptions);
     }
 
     /**
      * Destruye la sesion con todos sus datos
      * 
+     * Cierra la sesión antes de destruir para prevenir race conditions.
+     *
      * @throws RuntimeException
      */
     public static function destroy(): void
     {
         self::requireSession();
+
+        // Cerrar sesión antes de destruir para prevenir race conditions
+        session_write_close();
 
         // Eliminar cookie de sesión
         if (ini_get('session.use_cookies')) {
