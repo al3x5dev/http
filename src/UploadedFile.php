@@ -51,8 +51,6 @@ class UploadedFile
             $this->stream = new Stream($streamOrFile);
         } elseif ($streamOrFile instanceof Stream) {
             $this->stream = $streamOrFile;
-        } elseif ($streamOrFile instanceof Stream) {
-            $this->stream = $streamOrFile;
         } else {
             throw new \InvalidArgumentException(
                 'Invalid stream or file provided for UploadedFile'

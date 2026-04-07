@@ -83,7 +83,7 @@ class Session
             return;
         }
 
-        $_SESSION['_mk4u_flash']['_old']=[];
+        $_SESSION['_mk4u_flash']['_old'] = [];
 
         if (isset($_SESSION['_mk4u_flash']['_new']) && !empty($_SESSION['_mk4u_flash']['_new'])) {
             $_SESSION['_mk4u_flash']['_old'] = $_SESSION['_mk4u_flash']['_new'];
@@ -268,11 +268,28 @@ class Session
             }
 
             $expectedType = self::CFG[$key];
-            if (gettype($value) !== $expectedType) {
-                throw new \RuntimeException(sprintf("Expected data type '%s' for '%s,", $expectedType, $key));
+
+            switch ($expectedType) {
+                case 'boolean':
+                    if (is_bool($value)) break;
+                case 'integer':
+                    if (is_int($value)) break;
+                case 'string':
+                    if (is_string($value)) break;
+                default:
+                    throw new \RuntimeException(sprintf(
+                        "Expected %s for '%s', got %s",
+                        $expectedType,
+                        $key,
+                        gettype($value)
+                    ));
             }
 
             if ($key === 'name') {
+                // Validar que el nombre sea válido para PHP
+                if (!preg_match('/^[a-zA-Z0-9_]+$/', $value)) {
+                    throw new \RuntimeException("Invalid session name: $value");
+                }
                 $options[$key] = "_mk4u_$value";
             }
         }

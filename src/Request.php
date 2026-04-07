@@ -258,7 +258,7 @@ class Request
      */
     public function jsonData(bool $assoc = true): array|object|null
     {
-        if ($this->getHeaderLine('content-type') === 'application/json') {
+        if (str_contains($this->getHeaderLine('content-type'), 'application/json')) {
             return json_decode($this->content, $assoc, flags: JSON_THROW_ON_ERROR);
         }
         return null;
