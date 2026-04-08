@@ -19,7 +19,7 @@ trait Headers
     /**
      * Version del Protocolo Http
      */
-    protected function getProtocolVersion(): string
+    public function getProtocolVersion(): string
     {
         return $this->version;
     }
@@ -27,7 +27,7 @@ trait Headers
     /**
      * Version del Protocolo Http
      */
-    protected function setProtocolVersion(?string $version = null): static
+    public function setProtocolVersion(?string $version = null): static
     {
         // Si la versión es nula, no se establece nada y se retorna la instancia actual
         if ($version === null) {
