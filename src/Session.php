@@ -41,6 +41,8 @@ class Session
     /** @var array Opciones de configuración de sesión usadas en start() */
     private static array $startOptions = [];
 
+    private const CSRF_TOKEN_NAME = '_mk4u_csrf_token';
+
     use Flash;
 
     /**
@@ -335,5 +337,56 @@ class Session
         }
         self::setFlash($name, $value);
         return null;
+    }
+
+    // -------------- CSRF Token ---------------
+    /**
+     * Genera un token CSRF
+     */
+    public static function csrfToken(): string
+    {
+        self::requireSession();
+        
+        if (!isset($_SESSION[self::CSRF_TOKEN_NAME])) {
+            $_SESSION[self::CSRF_TOKEN_NAME] = bin2hex(random_bytes(32));
+        }
+        
+        return $_SESSION[self::CSRF_TOKEN_NAME];
+    }
+    
+    /**
+     * Genera un campo HTML con el token CSRF
+     */
+    public static function csrfField(): string
+    {
+        return '<input type="hidden" name="_token" value="' . self::csrfToken() . '">';
+    }
+    
+    /**
+     * Valida un token CSRF
+     */
+    public static function validateCsrf(string $token): bool
+    {
+        self::requireSession();
+        
+        if (!isset($_SESSION[self::CSRF_TOKEN_NAME])) {
+            return false;
+        }
+        
+        return hash_equals($_SESSION[self::CSRF_TOKEN_NAME], $token);
+    }
+    
+    /**
+     * Valida el token CSRF del request actual
+     */
+    public static function validateRequestCsrf(): bool
+    {
+        $token = $_POST['_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+        
+        if ($token === null) {
+            return false;
+        }
+        
+        return self::validateCsrf($token);
     }
 }

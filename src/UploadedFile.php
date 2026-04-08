@@ -127,6 +127,11 @@ class UploadedFile
         // Eliminar secuencias de path traversal (por si basename no funcionó bien)
         $filename = str_replace(['..', '/', '\\'], '', $filename);
 
+        // Validar que sea un nombre válido ASCII
+        if (!preg_match('/^[a-zA-Z0-9._-]+$/', $filename)) {
+            return 'uploaded_file';
+        }
+
         // Verificar que no sea vacío o solo puntos
         if ($filename === '' || $filename === '.') {
             return 'uploaded_file';
