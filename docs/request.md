@@ -16,14 +16,14 @@ $headers = ['Content-Type' => 'application/json'];
 $body = json_encode(['key' => 'value']);
 $version = '1.1';
 
-$request=new Mk4U\Http\Request($method, $uri, $headers, $body, $version);
+$request = new Mk4U\Http\Request($method, $uri, $headers, $body, $version);
 ```
 
 ### Create request based on PHP global variables.
 ```php
 require __DIR__ . '/vendor/autoload.php';
 
-$request=Mk4U\Http\Request::create();
+$request = Mk4U\Http\Request::create();
 ```
 
 ### Returns information for object debugging.

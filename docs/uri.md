@@ -7,9 +7,9 @@ Creating a new object
 ```php
 use Mk4U\Http\Uri;
 
-$uri=new Uri();
+$uri = new Uri();
 // or
-$uri=new Uri('http://john:xyz%2A12@example.org:8080/en/download?name=param#footer');
+$uri = new Uri('http://john:xyz%2A12@example.org:8080/en/download?name=param#footer');
 ```
 
 ### Returns object converted to a string

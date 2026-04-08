@@ -7,32 +7,32 @@ Creating a new response
 ```php
 use Mk4U\Http\Response;
 
-$response=new Response(
+$response = new Response(
   'Hello World!',
   headers:[
     'content-type' => 'text/plain'
     ]
 );
-return $response;
+echo $response;
 // or
-$response=new Response();
-return $response->plain('Hello World!');
+$response = new Response();
+echo $response::plain('Hello World!');
 // Both implementations return "Hello World!"" and the default status code is 200.
 ```
 
 Can also create responses for different types of content and [status codes](https://github.com/al3x5dev/http/blob/main/docs/status.md).
 ```php
-$response=new Response();
+$response = new Response();
 
 // You can specify the status code and the reason phrase via the Status enum or as an array.
-$status=Mk4U\Http\Status::MovedPermanently;
+$status = Mk4U\Http\Status::MovedPermanently;
 // or
-$status=[301,'Moved Permanently'];
+$status = [301,'Moved Permanently'];
 
 
-return $response->html('<h1>Hello World!</h1>', $status,['Retry-After'=>'Retry-After: 120'],'1.2');
+echo $response::html('<h1>Hello World!</h1>', $status,['Retry-After'=>'Retry-After: 120'],'1.2');
 
-return $response->json(
+echo $response::json(
   '{"message":"Hello World!"}',
    $status,
    ['Content-MD5'=>'d41d8cd98f00b204e9800998ecf8427e'],
@@ -78,7 +78,7 @@ $response->getReasonPhrase();
 This method returns the message body of the response.
 
 ```php
-$body=$response->getBody();
+$body = $response->getBody();
 ```
 
 ### Method `Response::setBody(mixed $body)`.
