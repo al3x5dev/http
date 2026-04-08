@@ -81,6 +81,8 @@ class Client
      */
     public function request(string $method, string $uri, array $options = []): Response
     {
+        \curl_reset($this->curl);
+
         $uri = $this->resolveUri($uri);
 
         // Obtener cabeceras

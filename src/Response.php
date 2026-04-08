@@ -181,4 +181,143 @@ class Response
         $headers['content-type'] = 'application/xml';
         return new static($content, $status, $headers, $version);
     }
+    
+
+    /**
+     * Descarga un archivo forzando la descarga en el navegador
+     * 
+     * @param string $filePath Ruta absoluta al archivo
+     * @param string|null $filename Nombre personalizado (opcional)
+     * @param array $headers Headers adicionales (opcional)
+     * @param bool $display Mostrar en navegador en lugar de descargar (opcional)
+     * @return Response
+     */
+    public static function download(
+        string $filePath,
+        ?string $filename = null,
+        array $headers = [],
+        bool $display = false
+    ): Response {
+        if (!file_exists($filePath)) {
+            throw new \InvalidArgumentException("File not found: $filePath");
+        }
+
+        if (!is_readable($filePath)) {
+            throw new \InvalidArgumentException("File not readable: $filePath");
+        }
+
+        $filename = $filename ?? basename($filePath);
+        $filesize = filesize($filePath);
+        $mimeType = self::guessMimeType($filePath);
+
+        $defaultHeaders = [
+            'Content-Type' => $mimeType,
+            'Content-Length' => $filesize,
+            'Content-Disposition' => $display
+                ? "inline; filename=\"$filename\""
+                : "attachment; filename=\"$filename\"",
+        ];
+
+        $headers = array_merge($defaultHeaders, $headers);
+
+        return new Response(
+            file_get_contents($filePath),
+            Status::Ok,
+            $headers
+        );
+    }
+
+    /**
+     * Muestra un archivo en el navegador (inline)
+     * 
+     * @param string $filePath Ruta absoluta al archivo
+     * @param array $headers Headers adicionales (opcional)
+     * @return Response
+     */
+    public static function file(string $filePath, array $headers = []): Response
+    {
+        return self::download($filePath, null, $headers, true);
+    }
+
+    /**
+     * Descarga un archivo desde un stream (para archivos grandes)
+     * 
+     * @param resource $stream Recurso de stream readable
+     * @param string|null $filename Nombre del archivo
+     * @param int|null $filesize Tamaño del archivo (opcional)
+     * @param array $headers Headers adicionales (opcional)
+     * @return Response
+     */
+    public static function streamDownload(
+        $stream,
+        ?string $filename = null,
+        ?int $filesize = null,
+        array $headers = []
+    ): Response {
+        if (!is_resource($stream) || get_resource_type($stream) !== 'stream') {
+            throw new \InvalidArgumentException('Invalid stream resource');
+        }
+
+        $defaultHeaders = [
+            'Content-Type' => 'application/octet-stream',
+            'Content-Transfer-Encoding' => 'binary',
+        ];
+
+        if ($filename !== null) {
+            $defaultHeaders['Content-Disposition'] = "attachment; filename=\"$filename\"";
+        }
+
+        if ($filesize !== null) {
+            $defaultHeaders['Content-Length'] = $filesize;
+        }
+
+        $headers = array_merge($defaultHeaders, $headers);
+
+        return new Response(
+            new Stream($stream),
+            Status::Ok,
+            $headers
+        );
+    }
+
+    /**
+     * Adivina el MIME type basado en la extensión
+     */
+    private static function guessMimeType(string $filePath): string
+    {
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        $mimeTypes = [
+            'pdf' => 'application/pdf',
+            'zip' => 'application/zip',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls' => 'application/vnd.ms-excel',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt' => 'application/vnd.ms-powerpoint',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'svg' => 'image/svg+xml',
+            'webp' => 'image/webp',
+            'ico' => 'image/x-icon',
+            'mp3' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'mp4' => 'video/mp4',
+            'webm' => 'video/webm',
+            'txt' => 'text/plain',
+            'html' => 'text/html',
+            'css' => 'text/css',
+            'js' => 'application/javascript',
+            'json' => 'application/json',
+            'xml' => 'application/xml',
+            'csv' => 'text/csv',
+            'tar' => 'application/x-tar',
+            'gz' => 'application/gzip',
+        ];
+
+        return $mimeTypes[$extension] ?? 'application/octet-stream';
+    }
 }
