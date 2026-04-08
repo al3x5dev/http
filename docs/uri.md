@@ -165,10 +165,49 @@ $uri->getQuery(true);
 // return  ["name"=>"param"]
 ```
 
+### Method `Uri::getQueryToArray()`.
+This method parses the query string and returns it as an associative array.
+```php
+$uri->getQueryToArray();
+// return ["name" => "param"]
+```
+
 ### Method `Uri::getFragment()`.
 This method retrieves the fragment component of the URI.
 
 ```php
 $uri->getFragment();
 // return "footer"
+```
+
+### Method `Uri::fromString(string $uri)`.
+This static method creates a new Uri instance from a URI string. Throws InvalidArgumentException if the URI cannot be parsed.
+
+```php
+$uri = Uri::fromString('https://example.com/path?query=value#fragment');
+// Returns a fully parsed Uri object
+```
+
+### Method `Uri::getAuthority()`.
+This method retrieves the authority component of the URI (user@host:port).
+
+```php
+$uri->getAuthority();
+// return "john:password@example.com:8080"
+```
+
+### Method `Uri::getUserInfo()`.
+This method retrieves the user information component of the URI.
+
+```php
+$uri->getUserInfo();
+// return "john:password"
+```
+
+### Method `Uri::getPort()`.
+This method retrieves the port component of the URI. Returns null if it's the default port for the scheme.
+
+```php
+$uri->getPort();
+// return 8080 or null for default ports
 ```

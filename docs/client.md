@@ -44,7 +44,7 @@ $response = $client->request('GET', 'https://api.example.com/resource');
 ```
 
 ### Handling Responses
-The response from the request is returned as a [Response](https://github.com/alexsandrov16/http/blob/main/docs/response.md) object. You can access the content, status code, and headers of the response.
+The response from the request is returned as a [Response](https://github.com/al3x5dev/http/blob/main/docs/response.md) object. You can access the content, status code, and headers of the response.
 
 ```php
 $content = $response->getBody(); // Response content

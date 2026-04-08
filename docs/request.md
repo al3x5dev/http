@@ -6,7 +6,7 @@ The `Request` class allows you to interact with the data coming into your applic
 There are two ways to create a new Request object, you can create a request based on PHP's superglobal variables, or simply simulate a request:
 
 ### Simulating a request
-When you simulate a request you must pass as parameters the http method, the uri or a [Uri object](https://github.com/alexsandrov16/http/blob/main/docs/uri.md), the headers (optional), the request body (optional) and the protocol version (optional).
+When you simulate a request you must pass as parameters the http method, the uri or a [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md), the headers (optional), the request body (optional) and the protocol version (optional).
 ```php
 require __DIR__ . '/vendor/autoload.php';
 
@@ -85,10 +85,10 @@ $request->getMethod();
 ```
 
 ### Method `Request::setUri($uri, $preserv_host = false)`.
-This method sets the [Uri object](https://github.com/alexsandrov16/http/blob/main/docs/uri.md) for the current request and optionally preserves the host in the request headers. Returns a copy of the Request object with the updated [Uri](https://github.com/alexsandrov16/http/blob/main/docs/uri.md) object and, optionally, the preserved host in the headers.
+This method sets the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) for the current request and optionally preserves the host in the request headers. Returns a copy of the Request object with the updated [Uri](https://github.com/al3x5dev/http/blob/main/docs/uri.md) object and, optionally, the preserved host in the headers.
 
 **Parameters:**
-- `$uri` (Uri): the [Uri object](https://github.com/alexsandrov16/http/blob/main/docs/uri.md) to set for the request.
+- `$uri` (Uri): the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) to set for the request.
 - `$preserv_host` (bool): Indicates whether to preserve the host in the request 
 ```php
 $request->setUri($uri);
@@ -97,7 +97,7 @@ $request->setUri($uri,true);
 ```
 
 ### Method `Request::getUri()`.
-This method returns the [Uri object](https://github.com/alexsandrov16/http/blob/main/docs/uri.md) associated with the current request.
+This method returns the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) associated with the current request.
 ```php
 $request->getUri();
 // return object(Mk4U\Http\Uri)
@@ -174,7 +174,7 @@ $request->rawData();
 ```
 
 ### Method `Request::files()`.
-This method returns an array containing the files uploaded to the server in the current request stored in the [UploadedFile](https://github.com/alexsandrov16/http/blob/main/docs/uploadedfile.md) or an empty array if there are no files.
+This method returns an array containing the files uploaded to the server in the current request stored in the [UploadedFile](https://github.com/al3x5dev/http/blob/main/docs/uploadedfile.md) or an empty array if there are no files.
 ```php
 $request->files();
 /* return [
@@ -186,4 +186,47 @@ $request->files();
     -size: 18289
   }
 ]*/ 
+```
+
+### Method `Request::getMethod()`.
+This method returns the HTTP method used in the request as an uppercase string.
+```php
+$request->getMethod();
+// return "GET", "POST", "PUT", etc.
+```
+
+### Method `Request::getUri()`.
+This method returns the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) associated with the current request.
+```php
+$request->getUri();
+// return object(Mk4U\Http\Uri)
+```
+
+### Method `Request::setUri(Uri $uri, bool $preserveHost = false)`.
+This method sets the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) for the current request. Optionally preserves the host header.
+
+**Parameters:**
+- `$uri` (Uri): The Uri object to set.
+- `$preserveHost` (bool): If true, preserves the existing Host header. Default is false.
+
+```php
+$uri = new Uri('https://example.com/path');
+$request->setUri($uri);
+
+// With host preservation
+$request->setUri($uri, true);
+```
+
+### Method `Request::getTarget()`.
+This method returns the target path of the request (the URI path).
+```php
+$request->getTarget();
+// return "/path/to/resource" or "/" if empty
+```
+
+### Method `Request::isFormData()`.
+This method determines if the request contains form data (application/x-www-form-urlencoded or multipart/form-data with POST method).
+```php
+$request->isFormData();
+// return true or false
 ```

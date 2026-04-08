@@ -20,7 +20,7 @@ return $response->plain('Hello World!');
 // Both implementations return "Hello World!"" and the default status code is 200.
 ```
 
-Can also create responses for different types of content and [status codes](https://github.com/alexsandrov16/http/blob/main/docs/status.md).
+Can also create responses for different types of content and [status codes](https://github.com/al3x5dev/http/blob/main/docs/status.md).
 ```php
 $response=new Response();
 
@@ -143,4 +143,77 @@ $xml=<<<XML
 </note>
 XML;
 Response::xml($xml, $status, $headers);
+```
+
+### Method `Response::download(string $filePath, ?string $filename = null, array $headers = [], bool $display = false)`.
+This method generates a response that forces the user's browser to download the file at the given path.
+
+**Parameters:**
+- `$filePath` (string): Absolute path to the file to download.
+- `$filename` (string|null): Custom filename for the download (optional, defaults to original filename).
+- `$headers` (array): Additional HTTP headers (optional).
+- `$display` (bool): If true, displays file inline instead of forcing download (default: false).
+
+```php
+// Basic download
+Response::download('/path/to/file.pdf');
+
+// With custom filename
+Response::download('/path/to/file.pdf', 'my-document.pdf');
+
+// With custom headers
+Response::download('/path/to/file.pdf', null, ['Cache-Control' => 'no-cache']);
+
+// Display file inline (in browser)
+Response::download('/path/to/image.png', display: true);
+```
+
+### Method `Response::file(string $filePath, array $headers = [])`.
+This method displays a file directly in the user's browser instead of downloading it (inline).
+
+**Parameters:**
+- `$filePath` (string): Absolute path to the file.
+- `$headers` (array): Additional HTTP headers (optional).
+
+```php
+// Display image in browser
+Response::file('/path/to/image.png');
+
+// With custom headers
+Response::file('/path/to/image.png', ['Cache-Control' => 'public, max-age=3600']);
+```
+
+### Method `Response::streamDownload($stream, ?string $filename = null, ?int $filesize = null, array $headers = [])`.
+This method downloads a file from a stream, useful for large files to avoid loading them entirely into memory.
+
+**Parameters:**
+- `$stream` (resource): A readable stream resource.
+- `$filename` (string|null): Custom filename for the download (optional).
+- `$filesize` (int|null): Size of the file in bytes (optional).
+- `$headers` (array): Additional HTTP headers (optional).
+
+```php
+// Download from stream
+$stream = fopen('/path/to/large-file.zip', 'r');
+Response::streamDownload($stream, 'download.zip', filesize('/path/to/large-file.zip'));
+
+// Or from a URL stream
+$stream = fopen('http://example.com/file.zip', 'r');
+Response::streamDownload($stream, 'file.zip');
+```
+
+### MIME Type Detection
+The `Response::download()`, `Response::file()`, and `Response::streamDownload()` methods automatically detect the MIME type based on the file extension:
+
+```php
+$response = Response::download('/path/to/document.pdf');
+// Content-Type: application/pdf
+
+$response = Response::download('/path/to/image.png');
+// Content-Type: image/png
+
+$response = Response::download('/path/to/data.json');
+// Content-Type: application/json
+
+// Unknown extensions default to: application/octet-stream
 ```

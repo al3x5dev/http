@@ -124,3 +124,74 @@ To return the message just call the `Session::flash()` method but this time just
 echo Session::flash('message');
 // Hello Word!!
 ```
+
+## CSRF Protection
+
+The Session class provides built-in CSRF (Cross-Site Request Forgery) protection methods.
+
+### Method `Session::csrfToken()`.
+Generates and returns a CSRF token. The token is stored in the session and regenerated if it doesn't exist.
+
+```php
+Session::start();
+$token = Session::csrfToken();
+// Returns a 64-character hex string
+```
+
+### Method `Session::csrfField()`.
+Returns an HTML hidden input field containing the CSRF token. This can be directly added to forms.
+
+```php
+Session::start();
+echo Session::csrfField();
+// Output: <input type="hidden" name="_token" value="...">
+```
+
+**Usage in a form:**
+```php
+<form method="POST" action="/submit">
+    <?= Session::csrfField() ?>
+    <input type="text" name="data">
+    <button type="submit">Submit</button>
+</form>
+```
+
+### Method `Session::validateCsrf(string $token)`.
+Validates a CSRF token against the stored session token. Uses constant-time comparison to prevent timing attacks.
+
+**Parameters:**
+- `$token` (string): The token to validate.
+
+```php
+Session::start();
+$isValid = Session::validateCsrf($_POST['_token']);
+// Returns true if valid, false otherwise
+```
+
+### Method `Session::validateRequestCsrf()`.
+Automatically validates the CSRF token from the current request. Checks both POST data and X-CSRF-Token header.
+
+```php
+Session::start();
+if (Session::validateRequestCsrf()) {
+    // Token is valid, process the request
+} else {
+    // Invalid token, reject the request
+}
+```
+
+**Complete example:**
+```php
+// In your form handler
+Session::start();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!Session::validateRequestCsrf()) {
+        Response::plain('Invalid CSRF token', Status::Forbidden)->send();
+        exit;
+    }
+    
+    // Process form data...
+    $name = $_POST['name'];
+}
+```
