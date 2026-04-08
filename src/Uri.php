@@ -274,11 +274,23 @@ class Uri
                 empty($parts['scheme']) &&
                 empty($parts['host']) &&
                 !empty($parts['path']) &&
-                !str_starts_with($parts['path'], '/') &&
-                filter_var($parts['path'], FILTER_VALIDATE_DOMAIN)
+                !str_starts_with($parts['path'], '/')
             ) {
-                $parts['host'] = $parts['path'];
-                $parts['path'] = '';
+                // Si el path contiene /, separar dominio del path
+                if (strpos($parts['path'], '/') !== false) {
+                    $pathParts = explode('/', $parts['path'], 2);
+                    $potentialHost = $pathParts[0];
+                    $pathPart = '/' . $pathParts[1];
+                } else {
+                    $potentialHost = $parts['path'];
+                    $pathPart = '';
+                }
+
+                // Verificar si es un dominio válido
+                if (filter_var($potentialHost, FILTER_VALIDATE_DOMAIN)) {
+                    $parts['host'] = $potentialHost;
+                    $parts['path'] = $pathPart;
+                }
             }
         }
 
