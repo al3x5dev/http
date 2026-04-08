@@ -124,7 +124,7 @@ class Response
     /**
      * Envia el mensaje HTTP
      */
-    public function send(): string
+    private function send(): string
     {
         header($this->getProtocolVersion() . ' ' . $this->getStatusCode() . ' ' . $this->getReasonPhrase());
 
@@ -181,7 +181,6 @@ class Response
         $headers['content-type'] = 'application/xml';
         return new static($content, $status, $headers, $version);
     }
-    
 
     /**
      * Descarga un archivo forzando la descarga en el navegador
@@ -198,25 +197,23 @@ class Response
         array $headers = [],
         bool $display = false
     ): Response {
-        if (!file_exists($filePath)) {
-            throw new \InvalidArgumentException("File not found: $filePath");
-        }
-
-        if (!is_readable($filePath)) {
-            throw new \InvalidArgumentException("File not readable: $filePath");
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            throw new \InvalidArgumentException("File not found or not readable: $filePath");
         }
 
         $filename = $filename ?? basename($filePath);
-        $filesize = filesize($filePath);
+        $filesize = @filesize($filePath) ?: null;
         $mimeType = self::guessMimeType($filePath);
 
         $defaultHeaders = [
             'Content-Type' => $mimeType,
-            'Content-Length' => $filesize,
-            'Content-Disposition' => $display
-                ? "inline; filename=\"$filename\""
-                : "attachment; filename=\"$filename\"",
+            'Content-Disposition' => $display ? 'inline' : 'attachment'
+                . "; filename=\"$filename\"",
         ];
+
+        if ($filesize !== null) {
+            $defaultHeaders['Content-Length'] = $filesize;
+        }
 
         $headers = array_merge($defaultHeaders, $headers);
 
