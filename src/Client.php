@@ -97,7 +97,7 @@ class Client
 
         // Verifica el método
         if (!in_array($this->request->getMethod(), self::METHODS)) {
-            throw new \InvalidArgumentException("Http method '$method' not implemented.");
+            throw new \InvalidArgumentException("The HTTP method '$method' is not supported");
         }
 
         // Establece las opciones
@@ -225,9 +225,6 @@ class Client
             throw new \InvalidArgumentException("Error processing empty arguments.");
         }
 
-        if (!in_array($method, self::METHODS)) {
-            throw new \RuntimeException("Unsupported HTTP methods");
-        }
         return $this->request($method, $arguments[0], $arguments[1] ?? []);
     }
 
