@@ -7,16 +7,16 @@ namespace Mk4U\Http;
  */
 class Request
 {
-    /** @param array datos de carga de archivos*/
+    /** @param array $files datos de carga de archivos*/
     private array $files;
 
-    /** @param string Metodo HTTP*/
+    /** @param string $method Metodo HTTP*/
     private string $method;
 
-    /** @param Uri instancia de la clase Mk4u\Http\Uri */
+    /** @param Uri $uri instancia de la clase Mk4u\Http\Uri */
     private Uri $uri;
 
-    /** @param array datos pasados por formulario(POST) */
+    /** @param array $form_content_type datos pasados por formulario(POST) */
     private array $form_content_type = ['application/x-www-form-urlencoded', 'multipart/form-data'];
 
     /** @param mixed $content Contenido de la solicitud HTTP */
@@ -42,7 +42,7 @@ class Request
 
         // URI
         $this->setUri(
-            $uri instanceof Uri ? $uri : Uri::fromString($uri)
+            $uri instanceof Uri ? $uri : new Uri($uri)
         );
 
         //Headers
@@ -76,11 +76,11 @@ class Request
     {
         //URI
         $uri = (new Uri())
-            ->setScheme(self::server('request_scheme'))
-            ->setHost(self::server('http_host'))
-            ->setPort(self::server('server_port'))
-            ->setPath(self::server('request_uri'))
-            ->setQuery(self::server('query_string'));
+            ->withScheme(self::server('request_scheme'))
+            ->withHost(self::server('http_host'))
+            ->withPort(self::server('server_port'))
+            ->withPath(self::server('request_uri'))
+            ->withQuery(self::server('query_string'));
 
         $headers = function_exists('getallheaders') ? getallheaders() : [];
 

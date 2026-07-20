@@ -64,11 +64,6 @@ class Client
         if (is_resource($this->sinkHandle)) {
             \fclose($this->sinkHandle);
         }
-
-        // Cierra la sesión de cURL
-        if (isset($this->curl)) {
-            \curl_close($this->curl);
-        }
     }
 
     /**
@@ -331,7 +326,7 @@ class Client
     {
         if (!empty($query)) {
             // Agrega las query
-            $uri = $this->request->getUri()->setQuery(http_build_query($query));
+            $uri = $this->request->getUri()->withQuery(http_build_query($query));
             \curl_setopt($this->curl, CURLOPT_URL, $uri);
         } else {
             // Sin query
