@@ -27,30 +27,26 @@ The available opening modes are:
 - `rb` Read in binary mode
 - `rt` Read in text mode
 - `r+` Read and write
-- `rb+` Read and write in binary mode 
-- `rt+` Read and write in binary mode
-- `rt+` Read and write in binary mode
+- `rb+` Read and write in binary mode
 - `rt+` Read and write in text mode
-- `a+` Write (aggregate) and read
-- `ab+` Write (append) and read in binary mode
-- `w+` Write and read
-- `wb` Write and read in binary mode
-- `x+` Create and write (will fail if the file already exists)
-- `xb+` Create and write in binary mode (will fail if the file already exists)
-- `c+` Write (truncate) and read
-- `cb+` Write (truncate) and read in binary mode
 - `w` Write (truncate)
 - `wb` Write in binary mode (truncate)
 - `wt` Write in text mode (truncate)
+- `w+` Write and read (truncate)
+- `wb+` Write and read in binary mode (truncate)
 - `a` Write (append)
 - `ab` Write (append) in binary mode
 - `at` Write (append) in text mode
-- `c` Write (truncate)
-- `x` Create and write (will fail if the file already exists)
-- `r+` Reading and writing
-- `rb+` Read and write in binary mode
-- `rw` Read and write (not a standard mode in PHP, but is included here for reference)
-- `c+` Write (truncate) and read
+- `a+` Write (append) and read
+- `ab+` Write (append) and read in binary mode
+- `x` Create and write (fails if exists)
+- `xb` Create and write in binary mode (fails if exists)
+- `x+` Create, write and read (fails if exists)
+- `xb+` Create, write and read in binary mode (fails if exists)
+- `c` Write (no truncate, no create)
+- `cb` Write in binary mode (no truncate, no create)
+- `c+` Write and read (no truncate, no create)
+- `cb+` Write and read in binary mode (no truncate, no create)
 
 ### Returns object converted to a string
 The `__toString` magic method returns the strean converted to a string.

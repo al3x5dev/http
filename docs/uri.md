@@ -1,9 +1,13 @@
 # Uri
-This `Uri` class represents a URI (Uniform Resource Identifier) and provides methods to manipulate its components.
+
+The `Uri` class represents a URI (Uniform Resource Identifier) and provides an immutable API to manipulate its components. Built on PHP 8.5's native `Uri\Rfc3986\Uri`.
+
+> **Requires PHP 8.5+** — uses the built-in RFC 3986 parser.
 
 ## Usage
 
-Creating a new object
+Creating a new object:
+
 ```php
 use Mk4U\Http\Uri;
 
@@ -12,202 +16,179 @@ $uri = new Uri();
 $uri = new Uri('http://john:xyz%2A12@example.org:8080/en/download?name=param#footer');
 ```
 
-### Returns object converted to a string
-The `__toString` magic method returns the URI converted to a string.
+### `__toString(): string`
+
+Returns the normalized URI string:
+
 ```php
 echo $uri;
-// return "http://john:xyz%2A12@example.org:8080/en/download?name=param#footer"
+// http://john:xyz%2A12@example.org:8080/en/download?name=param#footer
 ```
 
-### Returns information for object debugging.
-The `__debugInfo` magic method returns the URI representation as an array for debugging purposes.
+### `__debugInfo(): array`
+
+Returns URI components for debugging:
+
 ```php
 var_dump($uri);
-/* return [
-    "schema"=> "http",
-    "user-info"=> "john:xyz%2A12",
-    "host"=> "example.org",
-    "port"=> 8080,
-    "path"=> "/en/download",
-    "query"=> "name=param",
-    "fragment"=> "footer",
-]*/
+/*
+[
+    "scheme"   => "http",
+    "userInfo" => "john:xyz%2A12",
+    "host"     => "example.org",
+    "port"     => 8080,
+    "path"     => "/en/download",
+    "query"    => "name=param",
+    "fragment" => "footer",
+]
+*/
 ```
 
-### Method `Uri::setScheme(string $scheme = '')`.
-This method is in charge of setting the URL scheme
+## Immutable setters (PSR-7 style)
 
-**Parameters:**
-- `$scheme` (string): The scheme you want to set for the URL.
+All `with*` methods return a **new instance** — the original is not modified.
+
+### `withScheme(string $scheme): static`
 
 ```php
-$uri->setScheme($scheme);
+$uri = $uri->withScheme('https');
 ```
 
-### Method `Uri::setUserInfo(string $user, ?string $password = NULL)`.
-This method sets the user information in the URI to the format "user:password" if the password is provided. If the password is not provided, only the username is set.
-
-**Parameters:**
-- `$user` (string): The user name to be used to obtain authority.
-- `$password` (string|null): The password associated with the user. It is optional.
+### `withUserInfo(string $user, ?string $password = null): static`
 
 ```php
-$uri->setUserInfo($user, $password);
+$uri = $uri->withUserInfo('john', 'secret');
 ```
 
-### Method `Uri::setHost(string $host = '')`.
-This method is responsible for setting the host of the URL.
-
-**Parameters:**
-- `$host` (string): The host to be set for the URL.
+### `withHost(string $host): static`
 
 ```php
-$uri->setHost($host);
+$uri = $uri->withHost('example.org');
 ```
 
-### Method `Uri::setPort(?int $port = NULL)`.
-This method is responsible for setting the port of the URL. If the port is not valid, it throws an `InvalidArgumentException`.
+### `withPort(?int $port): static`
 
-**Parameters:**
-- `$port` (string): The port to be set for the URL.
+Returns `null` if the port matches the default for the scheme (80 for http, 443 for https, etc.).
 
 ```php
-$uri->setPort($port);
+$uri = $uri->withPort(8080);
 ```
 
-### Method `Uri::setPath(string $path = '/')`.
-This method is responsible for setting the URL path.
-
-**Parameters:**
-- `$path` (string): The path to set for the URL.
+### `withPath(string $path): static`
 
 ```php
-$uri->setPath($path);
+$uri = $uri->withPath('/en/download');
 ```
 
-### Method `Uri::setQuery(string $query = '')`.
-This method is responsible for setting the URL queries.
-
-**Parameters:**
-- `$query` (string): The queries you want to set for the URL.
+### `withQuery(string $query): static`
 
 ```php
-$uri->setQuery($query);
+$uri = $uri->withQuery('name=param');
 ```
 
-### Method `Uri::setFragment(string $fragment = '')`.
-This method takes care of setting the URL fragment.
-
-**Parameters:**
-- `$fragment` (string): The fragment you want to set for the URL.
+### `withFragment(string $fragment): static`
 
 ```php
-$uri->setFragment($fragment);
+$uri = $uri->withFragment('footer');
 ```
 
-### Method `Uri::getScheme()`.
-This method retrieves the schema component of the URI.
+## Getters
+
+### `getScheme(): string`
+
+Returns the scheme or empty string if not set.
+
 ```php
-$uri->getScheme();
-// return "http"
+$uri->getScheme(); // "http"
 ```
 
-### Method `Uri::getHost()`.
-This method retrieves the host component of the URI.
+### `getHost(): string`
+
+Returns the host or empty string if not set.
+
 ```php
-$uri->getHost();
-// return "example.org"
+$uri->getHost(); // "example.org"
 ```
 
-### Method `Uri::getAuthority()`.
-This method retrieves the authority component of the URI.
+### `getPort(): ?int`
+
+Returns the port or `null` if it's the default port for the scheme.
 
 ```php
-$uri->getAuthority();
+$uri->getPort(); // 8080 or null for default ports
 ```
 
-### Method `Uri::getUserInfo()`.
-This method retrieves the user information component of the URI.
+### `getPath(): string`
 
 ```php
-$uri->getUserInfo();
-// return "john:xyz%2A12"
+$uri->getPath(); // "/en/download"
 ```
 
-### Method `Uri::getPort()`.
-This method retrieves the port component of the URI.
+### `getQuery(): string`
 
-It checks if the schema is empty and if the port is the default port for that schema. Returns the port if it is not the default port, otherwise returns null.
+Returns the raw query string or empty string if not set.
+
 ```php
-$uri->getPort();
-// return 8080
+$uri->getQuery(); // "name=param"
 ```
 
-### Method `Uri::getPath()`.
-This method retrieves the path component of the URI.
+### `getQueryToArray(): array`
+
+Parses the query string into an associative array.
 
 ```php
-$uri->getPath();
-// return "/en/download"
+$uri->getQueryToArray(); // ["name" => "param"]
 ```
 
-### Method `Uri::getQuery(bool $array = false)`.
-This method retrieves the query string of the URI.
-
-**Parameters:**
-- `$array` (bool): optional. If set to true, the query is returned as an array.
+### `getFragment(): string`
 
 ```php
-$uri->getQuery();
-// return  "name=param"
-
-$uri->getQuery(true);
-// return  ["name"=>"param"]
+$uri->getFragment(); // "footer"
 ```
 
-### Method `Uri::getQueryToArray()`.
-This method parses the query string and returns it as an associative array.
+### `getAuthority(): string`
+
+Returns the authority in `[user-info@]host[:port]` format, or empty string if no host.
+
 ```php
-$uri->getQueryToArray();
-// return ["name" => "param"]
+$uri->getAuthority(); // "john:xyz%2A12@example.org:8080"
 ```
 
-### Method `Uri::getFragment()`.
-This method retrieves the fragment component of the URI.
+### `getUserInfo(): string`
+
+Returns the user info in `username[:password]` format, or empty string.
 
 ```php
-$uri->getFragment();
-// return "footer"
+$uri->getUserInfo(); // "john:xyz%2A12"
 ```
 
-### Method `Uri::fromString(string $uri)`.
-This static method creates a new Uri instance from a URI string. Throws InvalidArgumentException if the URI cannot be parsed.
+### `getPassword(): ?string`
+
+Returns the raw password component from the URI, or null if not present.
 
 ```php
-$uri = Uri::fromString('https://example.com/path?query=value#fragment');
-// Returns a fully parsed Uri object
+$uri->getPassword(); // "xyz%2A12"
 ```
 
-### Method `Uri::getAuthority()`.
-This method retrieves the authority component of the URI (user@host:port).
+## Comparison
+
+### `equals(Uri $uri, bool $fragment = false): bool`
+
+Checks if two URIs are equivalent. By default the fragment is included in the comparison; pass `true` to exclude it.
 
 ```php
-$uri->getAuthority();
-// return "john:password@example.com:8080"
+$uri->equals($otherUri);              // includes fragment
+$uri->equals($otherUri, true);        // excludes fragment
 ```
 
-### Method `Uri::getUserInfo()`.
-This method retrieves the user information component of the URI.
+## Chaining example
 
 ```php
-$uri->getUserInfo();
-// return "john:password"
-```
+$uri = (new Uri('http://example.com'))
+    ->withScheme('https')
+    ->withPort(8443)
+    ->withPath('/api/v1/users')
+    ->withQuery('page=2');
 
-### Method `Uri::getPort()`.
-This method retrieves the port component of the URI. Returns null if it's the default port for the scheme.
-
-```php
-$uri->getPort();
-// return 8080 or null for default ports
+echo $uri; // https://example.com:8443/api/v1/users?page=2
 ```
