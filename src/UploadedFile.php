@@ -23,7 +23,7 @@ class UploadedFile
     private ?string $file = null;
 
     public function __construct(
-        private $streamOrFile,
+        private mixed $streamOrFile,
         private ?int $size,
         private ?string $name = null,
         private ?string $type = null,
@@ -41,7 +41,7 @@ class UploadedFile
      * Configura el stream o archivo según el tipo de dato recibido
      * 
      * @param mixed $streamOrFile StreamInterface, string, resource o Stream
-     * @throws InvalidArgumentException Si el tipo no es válido
+     * @throws \InvalidArgumentException Si el tipo no es válido
      */
     private function setStreamOrFile($streamOrFile): void
     {
@@ -62,7 +62,7 @@ class UploadedFile
      * Valida y configura el código de error
      * 
      * @param int $error Código de error
-     * @throws InvalidArgumentException Si el código no es válido
+     * @throws \InvalidArgumentException Si el código no es válido
      */
     private function setError(int $error): void
     {
@@ -85,7 +85,7 @@ class UploadedFile
     /**
      * Valida que el archivo esté activo y listo para operar
      * 
-     * @throws RuntimeException Si hay error de upload o ya fue movido
+     * @throws \RuntimeException Si hay error de upload o ya fue movido
      */
     private function validateActive(): void
     {
@@ -153,8 +153,8 @@ class UploadedFile
      * @see http://php.net/move_uploaded_file
      * 
      * @param string $targetPath Ruta destino (directorio donde mover)
-     * @throws InvalidArgumentException Si el path no es válido
-     * @throws RuntimeException Si hay error de upload, ya fue movido, o falla el movimiento
+     * @throws \InvalidArgumentException Si el path no es válido
+     * @throws \RuntimeException Si hay error de upload, ya fue movido, o falla el movimiento
      */
     public function moveTo(string $targetPath): void
     {
@@ -218,7 +218,6 @@ class UploadedFile
      * Recupera una transmisión que represente el archivo cargado.
      *
      * @return Stream Representación del archivo cargado.
-     * @throws RuntimeException si no hay flujo disponible.
      */
     public function getStream(): Stream
     {
