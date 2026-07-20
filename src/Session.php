@@ -176,7 +176,7 @@ class Session
     /**
      * Verifica que la sesión esté activa y lanza excepción si no
      * 
-     * @throws RuntimeException Si la sesión no está iniciada
+     * @throws \RuntimeException Si la sesión no está iniciada
      */
     private static function requireSession(): void
     {
@@ -238,8 +238,6 @@ class Session
      * Destruye la sesion con todos sus datos
      * 
      * Cierra la sesión antes de destruir para prevenir race conditions.
-     *
-     * @throws RuntimeException
      */
     public static function destroy(): void
     {

@@ -15,13 +15,13 @@ namespace Mk4U\Http;
  */
 class Response
 {
-    /** @param int código de estado HTTP*/
+    /** @param int $code código de estado HTTP*/
     protected int $code;
 
-    /** @param string frase de motivo de respuesta asociada con el código de estado*/
+    /** @param string $phrase frase de motivo de respuesta asociada con el código de estado*/
     protected string $phrase;
 
-    /** @param mixed cuerpo del mensaje http*/
+    /** @param mixed $body cuerpo del mensaje http*/
     protected mixed $body;
 
     use Headers;
