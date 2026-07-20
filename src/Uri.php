@@ -2,38 +2,40 @@
 
 namespace Mk4U\Http;
 
+use Uri\Rfc3986\Uri as Rfc3986Uri;
 
 /**
  * Uri class
  */
 class Uri
 {
+    private Rfc3986Uri $uri;
     private const  DEFAULT_PORTS = [
-        'http'  => 80,
+        'http' => 80,
         'https' => 443,
+        'ftp' => 21,
+        'imap' => 143,
+        'pop' => 110,
+        'ldap' => 389,
     ];
 
-    public function __construct(
-        private string $scheme = '',
-        private string $userInfo = '',
-        private string $host = '',
-        private ?int $port = NULL,
-        private string $path = '',
-        private string $query = '',
-        private string $fragment = ''
-    ) {
-        $this->scheme = self::normalized($scheme);
-        $this->host = self::normalized($host);
-        $this->port = self::normalizedPort($port, $this->scheme);
+    public function __construct(string $str = '')
+    {
+        $native = new Rfc3986Uri($str);
+
+        // Obtener puerto
+        $port = self::normalizedPort($native->getPort(), $native->getScheme());
+        $this->uri = $native->withPort($port);
     }
 
     /** 
      * Establece el esquema de la url
      */
-    public function setScheme(string $scheme = ''): Uri
+    public function withScheme(string $scheme = ''): static
     {
-        $this->scheme = self::normalized($scheme);
-        return $this;
+        $new = clone $this;
+        $new->uri = $this->uri->withScheme($scheme);
+        return $new;
     }
 
     /**
@@ -46,61 +48,70 @@ class Uri
      * información.
      *
      * @param string $user El nombre de usuario que se utilizará para obtener autoridad.
-     * @param null|string $contraseña La contraseña asociada con $usuario.
+     * @param null|string $password La contraseña asociada con $usuario.
      * @return static Instancia con la información de usuario especificada.
      */
-    public function setUserInfo(string $user, ?string $password = NULL): Uri
+    public function withUserInfo(string $user, ?string $password = NULL): static
     {
-        $userInfo = self::userInfo($user, $password);
-        $this->userInfo = $userInfo;
-        return $this;
+        $userInfo = (!empty($password)) ? "$user:$password" : $user;
+        $new = clone $this;
+        $new->uri = $this->uri->withUserInfo($userInfo);
+        return $new;
     }
 
     /** 
      * Establece el host de la url
      */
-    public function setHost(string $host = ''): Uri
+    public function withHost(string $host = ''): static
     {
-        $this->host = self::normalized($host);
-        return $this;
+        $new = clone $this;
+        $new->uri = $this->uri->withHost($host);
+        return $new;
     }
 
     /** 
      * Establece puerto
      */
-    public function setPort(?int $port = NULL): Uri
+    public function withPort(?int $port = NULL): static
     {
-        $this->port = self::normalizedPort($port, $this->scheme);
-        return $this;
+        $new = clone $this;
+        $new->uri = $this->uri->withPort(
+            self::normalizedPort(
+                $port,
+                $this->getScheme()
+            )
+        );
+        return $new;
     }
 
     /** 
      * Establece la ruta de la url
-     * 
-     * Si la ruta contiene parametros de consulta los envia a setQuery()
      */
-    public function setPath(string $path = '/'): Uri
+    public function withPath(string $path = '/'): static
     {
-        $this->path = $path;
-        return $this;
+        $new = clone $this;
+        $new->uri = $this->uri->withPath($path);
+        return $new;
     }
 
     /** 
      * Establece las consultas de la url
      */
-    public function setQuery(string $query = ''): Uri
+    public function withQuery(string $query = ''): static
     {
-        $this->query = $query;
-        return $this;
+        $new = clone $this;
+        $new->uri = $this->uri->withQuery($query);
+        return $new;
     }
 
     /** 
      * Establece el fragmento de URI especificado
      */
-    public function setFragment(string $fragment = ''): Uri
+    public function withFragment(string $fragment = ''): static
     {
-        $this->fragment = $fragment;
-        return $this;
+        $new = clone $this;
+        $new->uri = $this->uri->withFragment($fragment);
+        return $new;
     }
 
     /** 
@@ -110,7 +121,7 @@ class Uri
      */
     public function getScheme(): string
     {
-        return $this->scheme;
+        return $this->uri->getScheme() ?? '';
     }
 
     /** 
@@ -120,7 +131,7 @@ class Uri
      */
     public function getHost(): string
     {
-        return $this->host;
+        return $this->uri->getHost() ?? '';
     }
 
 
@@ -129,7 +140,7 @@ class Uri
      */
     public function getPort(): ?int
     {
-        return $this->port;
+        return $this->uri->getPort();
     }
 
     /** 
@@ -140,7 +151,7 @@ class Uri
      */
     public function getPath(): string
     {
-        return $this->path;
+        return $this->uri->getPath();
     }
 
     /** 
@@ -151,7 +162,7 @@ class Uri
      */
     public function getQuery(): string
     {
-        return $this->query;
+        return $this->uri->getQuery() ?? '';
     }
 
     /**
@@ -161,7 +172,7 @@ class Uri
      */
     public function getQueryToArray(): array
     {
-        parse_str($this->query, $array);
+        parse_str($this->getQuery() ?? '', $array);
         return $array;
     }
 
@@ -173,7 +184,7 @@ class Uri
      */
     public function getFragment(): string
     {
-        return $this->fragment;
+        return $this->uri->getFragment() ?? '';
     }
 
     /**
@@ -195,16 +206,18 @@ class Uri
      */
     public function getAuthority(): string
     {
-        $authority = $this->host;
-
-        if ($this->userInfo !== '') {
-            $authority = $this->userInfo . '@' . $authority;
+        $authority = $this->getHost();
+        if ($authority === '') {
+            return '';
         }
-
-        if ($this->getPort() !== null) {
-            $authority .= ':' . $this->getPort();
+        $userInfo = $this->getUserInfo();
+        if ($userInfo !== '') {
+            $authority = $userInfo . '@' . $authority;
         }
-
+        $port = $this->getPort();
+        if ($port !== null) {
+            $authority .= ':' . $port;
+        }
         return $authority;
     }
 
@@ -224,7 +237,28 @@ class Uri
      */
     public function getUserInfo(): string
     {
-        return $this->userInfo;
+        return $this->uri->getUserInfo() ?? '';
+    }
+
+    // Obtener clave sin procesar
+    public function getPassword(): ?string
+    {
+        return $this->uri->getRawPassword();
+    }
+
+    /**
+     * Verifica si dos URIs son equivalentes
+     * 
+     * @param Uri $uri Objeto URI a comparar con la URI actual. 
+     * @param bool $fragment Indica si el componente de fragmento se tiene en cuenta en la comparación. Por defecto se excluye
+     */
+    public function equals(Uri $uri, bool $fragment = false): bool
+    {
+        $comparisonMode = ($fragment)
+            ? \Uri\UriComparisonMode::ExcludeFragment
+            : \Uri\UriComparisonMode::IncludeFragment;
+
+        return $this->uri->equals($uri->uri, $comparisonMode);
     }
 
     /** 
@@ -234,83 +268,7 @@ class Uri
      */
     public function __toString(): string
     {
-        $uri = '';
-
-        if ($this->scheme !== '') {
-            $uri .= $this->scheme . '://';
-        }
-
-        $uri .= $this->getAuthority() . $this->path;
-        if (!empty($this->query)) $uri .= '?' . $this->query;
-        if (!empty($this->fragment)) $uri .= '#' . $this->fragment;
-
-        return $uri;
-    }
-
-    /**
-     * Normalizar a minusculas cadena de caracteres
-     */
-    private static function userInfo(string $user, ?string $password = NULL): string
-    {
-        return (isset($password)) ? "$user:$password" : $user;
-    }
-
-    /**
-     * Establece URI desde una string
-     */
-    public static function fromString(string $uri): Uri
-    {
-        $parts = [];
-
-        if ($uri !== '') {
-            $parts = parse_url($uri);
-            if (empty($parts)) {
-                //Unable to parse URI
-                throw new \InvalidArgumentException("Unable to parse URI");
-            }
-
-            // Fix: si no hay scheme, no hay host, y el path parece dominio (no empieza con /), moverlo a host
-            if (
-                empty($parts['scheme']) &&
-                empty($parts['host']) &&
-                !empty($parts['path']) &&
-                !str_starts_with($parts['path'], '/')
-            ) {
-                // Si el path contiene /, separar dominio del path
-                if (strpos($parts['path'], '/') !== false) {
-                    $pathParts = explode('/', $parts['path'], 2);
-                    $potentialHost = $pathParts[0];
-                    $pathPart = '/' . $pathParts[1];
-                } else {
-                    $potentialHost = $parts['path'];
-                    $pathPart = '';
-                }
-
-                // Verificar si es un dominio válido
-                if (filter_var($potentialHost, FILTER_VALIDATE_DOMAIN)) {
-                    $parts['host'] = $potentialHost;
-                    $parts['path'] = $pathPart;
-                }
-            }
-        }
-
-        return new static(
-            $parts['scheme'] ?? '',
-            self::userInfo($parts['user'] ?? '', $parts['pass'] ?? null),
-            $parts['host'] ?? '',
-            $parts['port'] ?? null,
-            $parts['path'] ?? '',
-            $parts['query'] ?? '',
-            $parts['fragment'] ?? ''
-        );
-    }
-
-    /**
-     * Normalizacion a caracteres en minuscula
-     */
-    private static function normalized(string $str = ''): string
-    {
-        return strtolower($str);
+        return $this->uri->toString();
     }
 
     /**
@@ -319,7 +277,7 @@ class Uri
     private static function normalizedPort(?int $port = null, string $scheme = ''): ?int
     {
         if (!is_null($port) && ($port < 1 || $port > 65535)) {
-            throw new \InvalidArgumentException(sprintf('Invalid port: %d. It must be between 1 and 65535', $port));
+            throw new \Uri\InvalidUriException(sprintf('Invalid port: %d. It must be between 1 and 65535', $port));
         }
 
         if ($scheme === '' && is_null($port)) {
@@ -342,7 +300,7 @@ class Uri
     {
         return [
             'scheme' => $this->getScheme(),
-            'userInfo' => $this->userInfo,
+            'userInfo' => $this->getUserInfo(),
             'host' => $this->getHost(),
             'port' => $this->getPort(),
             'path' => $this->getPath(),
