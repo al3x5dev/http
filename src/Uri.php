@@ -255,8 +255,8 @@ class Uri
     public function equals(Uri $uri, bool $fragment = false): bool
     {
         $comparisonMode = ($fragment)
-            ? \Uri\UriComparisonMode::ExcludeFragment
-            : \Uri\UriComparisonMode::IncludeFragment;
+            ? \Uri\UriComparisonMode::IncludeFragment
+            : \Uri\UriComparisonMode::ExcludeFragment;
 
         return $this->uri->equals($uri->uri, $comparisonMode);
     }
