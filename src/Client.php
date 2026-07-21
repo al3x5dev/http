@@ -76,6 +76,11 @@ class Client
      */
     public function request(string $method, string $uri, array $options = []): Response
     {
+        $parsed = parse_url($uri);
+        $scheme = strtolower($parsed['scheme'] ?? '');
+        if ($scheme !== '' && !in_array($scheme, self::ALLOWED_SCHEMES, true)) {
+            throw new \InvalidArgumentException("Scheme '$scheme' not allowed");
+        }
         \curl_reset($this->curl);
 
         $uri = $this->resolveUri($uri);
