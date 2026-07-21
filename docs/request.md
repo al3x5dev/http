@@ -32,39 +32,47 @@ The magic method `__debugInfo` returns an array with information about the HTTP 
 var_dump($request);
 ```
 
-### Method `Request::server(string $index)`.
-This static method returns a specific value from the `$_SERVER` array or the entire array if no index is provided. It is passed as a parameter the Index of the `$_SERVER` array from which you want to get the value. Returns the value corresponding to the index provided in `$_SERVER`, or the entire array if no index is specified. This method is case insensitive.
+### Method `Request::server(?string $index = null, mixed $default = null, bool $all = false)`.
+This static method returns a specific value from the `$_SERVER` array, the entire array, or a default value if the index is not found. The index is case insensitive.
+
+**Parameters:**
+- `$index` (string|null): The index to retrieve. If null, returns the entire `$_SERVER` array.
+- `$default` (mixed): The default value to return if the index does not exist. Defaults to null.
+- `$all` (bool): If true, returns the entire `$_SERVER` array regardless of other parameters.
 ```php
-$request->server();
+Request::server();
 /* return [
   "HTTP_HOST" => "localhost"
   "REQUEST_METHOD" => "GET"
   "REQUEST_URI" => "/website/"
-  "SCRIPT_NAME" => "/website/index.php"
   ...
 ]*/
 
-// This Method Is Case Insensitive
-$request->server('REMOTE_ADDR');
-$request->server('remote_addr');
-$request->server('REmoTe_ADdR');
-// return 127.0.0.1
+Request::server('REMOTE_ADDR');        // 127.0.0.1
+Request::server('remote_addr');        // 127.0.0.1
+Request::server('UNKNOWN_KEY');        // null
+Request::server('REQUEST_METHOD');        // 'GET'
+Request::server('REQUEST_METHOD', 'HEAD');    // 'HEAD'
+```
+
+### Method `Request::getClientIp()`.
+Returns the client IP address following the priority: `HTTP_CLIENT_IP`, `HTTP_X_FORWARDED_FOR`, `HTTP_X_REAL_IP`, `REMOTE_ADDR`. Returns `'0.0.0.0'` if none are available.
+```php
+Request::getClientIp(); // "203.0.113.5" or "127.0.0.1"
 ```
 
 ### Method `Request::getTarget()`.
-This method gets the path of the current URI and assigns it to the target property. Returns the path of the current URI stored in the target property, or '/' if no path has been assigned.
+Returns the path of the current URI, or '/' if no path is set.
 ```php
 $request->getTarget();
 // return "/" or "/website/"
 ```
 
 ### Method `Request::setMethod(string $method)`.
-This method sets the HTTP method for the current request. Receives as parameter the HTTP method to be set. Returns a copy of the Request object with the updated HTTP method. This method is case insensitive.
+This method sets the HTTP method for the current request. Returns the same instance for chaining. This method is case insensitive.
 ```php
-// This Method Is Case Insensitive.
 $request->setMethod('GET');
 $request->setMethod('get');
-$request->setMethod('Get');
 ```
 
 ### Method `Request::hasMethod(string $method)`.
@@ -81,14 +89,14 @@ $request->getMethod(); // "GET"
 ```
 
 ### Method `Request::setUri(Uri $uri, bool $preserveHost = false)`.
-This method sets the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) for the current request and optionally preserves the host in the request headers. Returns a **new instance** with the updated Uri.
+This method sets the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) for the current request and optionally preserves the host in the request headers. Returns the same instance for chaining.
 
 **Parameters:**
 - `$uri` (Uri): the [Uri object](https://github.com/al3x5dev/http/blob/main/docs/uri.md) to set for the request.
 - `$preserveHost` (bool): Indicates whether to preserve the host in the request headers.
 ```php
-$request = $request->setUri($uri);
-$request = $request->setUri($uri, true);
+$request->setUri($uri);
+$request->setUri($uri, true);
 ```
 
 ### Method `Request::getUri()`.
@@ -180,4 +188,3 @@ $request->files();
   }
 ]*/ 
 ```
-
