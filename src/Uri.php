@@ -24,7 +24,7 @@ class Uri
         $native = new Rfc3986Uri($str);
 
         // Obtener puerto
-        $port = self::normalizedPort($native->getPort(), $native->getScheme());
+        $port = self::normalizedPort($native->getPort(), $native->getScheme() ?? '');
         $this->uri = $native->withPort($port);
     }
 
