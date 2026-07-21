@@ -22,9 +22,6 @@ class Request
     /** @param mixed $content Contenido de la solicitud HTTP */
     private mixed $content = null;
 
-    /** @param array $output Datos parseados del cuerpo del mensaje*/
-    private ?array $output = null;
-
     use Headers;
 
     /**
@@ -74,34 +71,65 @@ class Request
      */
     public static function create(): static
     {
-        //URI
-        $uri = (new Uri())
-            ->withScheme(self::server('request_scheme'))
-            ->withHost(self::server('http_host'))
-            ->withPort(self::server('server_port'))
-            ->withPath(self::server('request_uri'))
-            ->withQuery(self::server('query_string'));
-
+        $uri = self::createUri();
         $headers = function_exists('getallheaders') ? getallheaders() : [];
 
         $request = new static(
-            self::server('request_method'),
+            self::server('request_method','GET'),
             $uri,
             $headers
         );
 
-        // Content
         $request->getContent();
 
         return $request;
     }
 
     /**
+     * Crea un objeto Uri a partir del array $_SERVER
+     */
+    private static function createUri(): Uri
+    {
+        $server = self::server();
+
+        [$user, $pass] = self::fetchUserInfo($server);
+
+        $uri = (new Uri())
+            ->withScheme(self::fetchScheme($server))
+            ->withHost(self::fetchHost($server))
+            ->withPort(self::fetchPort($server))
+            ->withPath(self::fetchPath($server))
+            ->withQuery(self::fetchQuery($server));
+
+        if ($user !== null) {
+            $uri = $uri->withUserInfo($user, $pass);
+        }
+
+        return $uri;
+    }
+
+    /**
      * Devuelve parametros del $_SERVER.
      */
-    public static function server(string $index = ''): array|string
+    public static function server(?string $index = null, mixed $default = null, bool $all = false): mixed
     {
-        return empty($index) ? $_SERVER : ($_SERVER[strtoupper($index)] ?? '');
+        if ($all || $index === null) {
+            return $_SERVER;
+        }
+
+        return $_SERVER[strtoupper($index)] ?? $default;
+    }
+
+    /**
+     * Obtiene Ip del cliente
+     */
+    public static function getClientIp(): string
+    {
+        return self::server('HTTP_CLIENT_IP')
+            ?? self::server('HTTP_X_FORWARDED_FOR')
+            ?? self::server('HTTP_X_REAL_IP')
+            ?? self::server('REMOTE_ADDR')
+            ?? '0.0.0.0';
     }
 
     /**
@@ -126,7 +154,7 @@ class Request
     /**
      * Establecer metodo http
      */
-    public function setMethod(string $method): Request
+    public function setMethod(string $method): static
     {
         $this->method = strtoupper($method);
         return $this;
@@ -151,7 +179,7 @@ class Request
     /**
      * Establecer Uri
      */
-    public function setUri(Uri $uri, bool $preserveHost = false): Request
+    public function setUri(Uri $uri, bool $preserveHost = false): static
     {
         $this->uri = $uri;
 
@@ -278,6 +306,72 @@ class Request
     public function files(): array
     {
         return $this->files ?? [];
+    }
+
+    private static function fetchScheme(array $server): string
+    {
+        if (!empty($server['HTTPS']) && filter_var($server['HTTPS'], FILTER_VALIDATE_BOOLEAN)) {
+            return 'https';
+        }
+        return 'http';
+    }
+
+    private static function fetchHost(array $server): string
+    {
+        if (!empty($server['HTTP_HOST'])) {
+            return preg_replace('/:\d+$/', '', $server['HTTP_HOST']);
+        }
+        return $server['SERVER_NAME'] ?? 'localhost';
+    }
+
+    private static function fetchPort(array $server): ?int
+    {
+        if (!empty($server['HTTP_HOST']) && preg_match('/:(\d+)$/', $server['HTTP_HOST'], $m)) {
+            return (int) $m[1];
+        }
+        if (!empty($server['SERVER_PORT'])) {
+            return (int) $server['SERVER_PORT'];
+        }
+        return null;
+    }
+
+    private static function fetchPath(array $server): string
+    {
+        $path = $server['REQUEST_URI'] ?? $server['PHP_SELF'] ?? '/';
+        $path = parse_url($path, PHP_URL_PATH);
+        return $path !== false && $path !== null ? $path : '/';
+    }
+
+    private static function fetchQuery(array $server): string
+    {
+        if (!empty($server['QUERY_STRING'])) {
+            return $server['QUERY_STRING'];
+        }
+        if (!empty($server['REQUEST_URI'])) {
+            $parts = explode('?', $server['REQUEST_URI'], 2);
+            return $parts[1] ?? '';
+        }
+        return '';
+    }
+
+    private static function fetchUserInfo(array $server): array
+    {
+        $user = $server['PHP_AUTH_USER'] ?? null;
+        $pass = $server['PHP_AUTH_PW'] ?? null;
+
+        if (
+            !empty($server['HTTP_AUTHORIZATION'])
+            && str_starts_with(strtolower($server['HTTP_AUTHORIZATION']), 'basic')
+        ) {
+            $decoded = base64_decode(substr($server['HTTP_AUTHORIZATION'], 6), true);
+            if ($decoded !== false) {
+                $parts = explode(':', $decoded, 2);
+                $user = $parts[0];
+                $pass = $parts[1] ?? null;
+            }
+        }
+
+        return [$user, $pass];
     }
 
     /**
