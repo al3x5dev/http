@@ -3,7 +3,7 @@
     "description": "Small HTTP library",
     "type": "library",
     "require": {
-        "php": ">=8.5",
+        "php": ">=8.2",
         "ext-curl": "*",
         "ralouphie/getallheaders": "^3.0"
     },
